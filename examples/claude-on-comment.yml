@@ -1,0 +1,36 @@
+# Example notomate workflow: reply to any comment that tags @claude.
+#
+# Copy this into a notomate workspace's workflow editor. Before enabling it,
+# configure on the workspace:
+#   - secrets.ANTHROPIC_API_KEY       -> an Anthropic API key, OR
+#     secrets.CLAUDE_CODE_OAUTH_TOKEN -> a token from `claude setup-token`,
+#                                        if you want to run under a Claude
+#                                        subscription instead of a metered key
+#   - secrets.NM_API_KEY              -> a notomate personal API key
+#                                        (User Settings > API Keys) belonging
+#                                        to a member of this workspace
+#   - vars.NM_API_BASE_URL            -> the notomate API's base URL reachable
+#                                        from the runner, e.g.
+#                                        http://notomate-api:8080
+#
+# The workflow engine fires this job for EVERY new comment in the workspace;
+# the action itself checks whether the comment actually tags @claude and
+# no-ops (conclusion=skipped) otherwise.
+name: Claude on comment
+
+on:
+  comment:
+    types: [created]
+
+jobs:
+  respond:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Claude
+        uses: notomate/claude-notomate-action@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Or, instead of anthropic-api-key, use a Claude subscription:
+          # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          notomate-base-url: ${{ vars.NM_API_BASE_URL }}
+          notomate-api-key: ${{ secrets.NM_API_KEY }}

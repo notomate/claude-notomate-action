@@ -1,0 +1,72 @@
+name: "Claude Notomate Action"
+description: "Runs the Claude Agent SDK against a notomate @claude comment mention and replies in the same thread."
+author: "claude-notomate-action"
+
+inputs:
+  anthropic-api-key:
+    description: "Anthropic API key used to run the Claude Agent SDK. Provide this or claude-code-oauth-token."
+    required: false
+    default: ""
+  claude-code-oauth-token:
+    description: "Claude Code OAuth token (from `claude setup-token`), used instead of a metered API key when running under a Claude subscription. Provide this or anthropic-api-key."
+    required: false
+    default: ""
+  notomate-base-url:
+    description: "Base URL of the notomate API, e.g. http://notomate-api:8080."
+    required: true
+  notomate-api-key:
+    description: "Notomate personal API key (Authorization: Bearer) used to call the notomate REST API."
+    required: true
+  trigger-phrase:
+    description: "Phrase that must appear in a comment to trigger the agent."
+    required: false
+    default: "@claude"
+  allowed-tools:
+    description: "Comma-separated list of notomate MCP tool names to allow. Defaults to the full curated set."
+    required: false
+    default: ""
+  max-turns:
+    description: "Maximum number of agent turns to run."
+    required: false
+    default: "30"
+  node-version:
+    description: "Node.js version to run the action with."
+    required: false
+    default: "20"
+
+outputs:
+  conclusion:
+    description: "One of success, skipped, or failure."
+    value: ${{ steps.run.outputs.conclusion }}
+  comment-id:
+    description: "The id of the reply comment that was posted, if any."
+    value: ${{ steps.run.outputs.comment-id }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd "${{ github.action_path }}"
+        npm ci --omit=dev
+
+    - name: Run claude-notomate-action
+      id: run
+      shell: bash
+      run: |
+        cd "${{ github.action_path }}"
+        npx tsx src/index.ts
+      env:
+        INPUT_ANTHROPIC-API-KEY: ${{ inputs.anthropic-api-key }}
+        INPUT_CLAUDE-CODE-OAUTH-TOKEN: ${{ inputs.claude-code-oauth-token }}
+        INPUT_NOTOMATE-BASE-URL: ${{ inputs.notomate-base-url }}
+        INPUT_NOTOMATE-API-KEY: ${{ inputs.notomate-api-key }}
+        INPUT_TRIGGER-PHRASE: ${{ inputs.trigger-phrase }}
+        INPUT_ALLOWED-TOOLS: ${{ inputs.allowed-tools }}
+        INPUT_MAX-TURNS: ${{ inputs.max-turns }}
