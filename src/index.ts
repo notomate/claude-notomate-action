@@ -53,7 +53,8 @@ async function run(): Promise<void> {
     : buildAllowedToolNames(tools.map((t) => t.name));
 
   const systemContext = payload.note
-    ? `Context: this comment is on note "${payload.note.title}" (id: ${payload.note.id}) in workspace "${payload.workspace.name}".`
+    ? `Context: this comment is on note "${payload.note.title}" (id: ${payload.note.id}) in workspace "${payload.workspace.name}".\n` +
+      `Note content (raw TipTap JSON, as stored by notomate):\n${payload.note.content}`
     : `Context: this comment is on note id ${comment.note_id} in workspace "${payload.workspace.name}".`;
 
   try {
