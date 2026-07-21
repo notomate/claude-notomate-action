@@ -63,10 +63,10 @@ runs:
         cd "${{ github.action_path }}"
         npx tsx src/index.ts
       env:
-        INPUT_ANTHROPIC-API-KEY: ${{ inputs.anthropic-api-key }}
-        INPUT_CLAUDE-CODE-OAUTH-TOKEN: ${{ inputs.claude-code-oauth-token }}
-        INPUT_NOTOMATE-BASE-URL: ${{ inputs.notomate-base-url }}
-        INPUT_NOTOMATE-API-KEY: ${{ inputs.notomate-api-key }}
-        INPUT_TRIGGER-PHRASE: ${{ inputs.trigger-phrase }}
-        INPUT_ALLOWED-TOOLS: ${{ inputs.allowed-tools }}
-        INPUT_MAX-TURNS: ${{ inputs.max-turns }}
+        INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        INPUT_CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
+        INPUT_NOTOMATE_BASE_URL: ${{ inputs.notomate-base-url }}
+        INPUT_NOTOMATE_API_KEY: ${{ inputs.notomate-api-key }}
+        INPUT_TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
+        INPUT_ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
+        INPUT_MAX_TURNS: ${{ inputs.max-turns }}

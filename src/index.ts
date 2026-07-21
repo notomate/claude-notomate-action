@@ -4,14 +4,27 @@ import { NotomateClient } from "./notomate-client.js";
 import { buildAllowedToolNames, buildNotomateMcpServer } from "./mcp/server.js";
 import { runAgent } from "./agent.js";
 
+// Composite actions can't rely on @actions/core's default INPUT_<NAME> lookup for
+// kebab-case inputs: the runner sets them as literal hyphenated env vars, which bash
+// can't export/pass through cleanly, so the composite step maps them to INPUT_<NAME>
+// with underscores instead. Read those directly rather than via core.getInput().
+function getInput(name: string, options?: { required?: boolean }): string {
+  const envName = `INPUT_${name.replace(/-/g, "_").toUpperCase()}`;
+  const value = (process.env[envName] || "").trim();
+  if (options?.required && !value) {
+    throw new Error(`Input required and not supplied: ${name}`);
+  }
+  return value;
+}
+
 async function run(): Promise<void> {
-  const anthropicApiKey = core.getInput("anthropic-api-key") || undefined;
-  const claudeCodeOAuthToken = core.getInput("claude-code-oauth-token") || undefined;
-  const notomateBaseUrl = core.getInput("notomate-base-url", { required: true });
-  const notomateApiKey = core.getInput("notomate-api-key", { required: true });
-  const triggerPhrase = core.getInput("trigger-phrase") || "@claude";
-  const allowedToolsOverride = core.getInput("allowed-tools");
-  const maxTurns = Number.parseInt(core.getInput("max-turns") || "30", 10);
+  const anthropicApiKey = getInput("anthropic-api-key") || undefined;
+  const claudeCodeOAuthToken = getInput("claude-code-oauth-token") || undefined;
+  const notomateBaseUrl = getInput("notomate-base-url", { required: true });
+  const notomateApiKey = getInput("notomate-api-key", { required: true });
+  const triggerPhrase = getInput("trigger-phrase") || "@claude";
+  const allowedToolsOverride = getInput("allowed-tools");
+  const maxTurns = Number.parseInt(getInput("max-turns") || "30", 10);
 
   if (!anthropicApiKey && !claudeCodeOAuthToken) {
     core.setFailed(
