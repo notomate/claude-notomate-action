@@ -46,7 +46,12 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
   // used when running under a Claude subscription instead of a metered API
   // key). Only set the vars that were actually supplied so an unset one
   // doesn't shadow an ambient credential with an empty string.
-  const authEnv: Record<string, string> = {};
+  const authEnv: Record<string, string> = {
+    // notomate runners execute jobs as root inside a throwaway container, and
+    // the bundled Claude Code CLI refuses --dangerously-skip-permissions
+    // under root/sudo unless this is set, exiting 1 before doing anything.
+    IS_SANDBOX: "1",
+  };
   if (options.credentials.anthropicApiKey) {
     authEnv.ANTHROPIC_API_KEY = options.credentials.anthropicApiKey;
   }
