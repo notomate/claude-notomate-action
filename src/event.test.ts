@@ -25,3 +25,25 @@ test("extractCommand finds the phrase mid-sentence", () => {
     "can you pin it?",
   );
 });
+
+test("extractCommand recognizes a notomate mention token for the trigger phrase", () => {
+  assert.equal(
+    extractCommand(
+      "@[claude](019f84fd-b262-7806-a10b-36f8acfc50a3) \n幫我摘要這個筆記",
+      "@claude",
+    ),
+    "幫我摘要這個筆記",
+  );
+});
+
+test("extractCommand ignores mention tokens for other members", () => {
+  assert.equal(
+    extractCommand("@[Jane Doe](2f6a) can you take a look?", "@claude"),
+    null,
+  );
+});
+
+test("extractCommand returns null for a mention token with nothing following it", () => {
+  assert.equal(extractCommand("@[claude](019f84fd)", "@claude"), null);
+  assert.equal(extractCommand("@[claude](019f84fd)   ", "@claude"), null);
+});

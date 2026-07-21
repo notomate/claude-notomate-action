@@ -61,14 +61,34 @@ export function readEventPayload(): CommentEventPayload {
   return JSON.parse(raw) as CommentEventPayload;
 }
 
+// notomate's comment composer stores @mentions inline as
+// "@[Display Name](userId)" rather than literal text (see
+// web/src/components/commentsidebar/commentMarkdown.ts's mentionToken()) --
+// picking "@claude" from the mention autocomplete produces this token, not
+// the literal string "@claude".
+const MENTION_TOKEN_RE = /@\[([^\]]+)\]\(([\w-]+)\)/g;
+
 /**
- * Case-insensitively finds triggerPhrase in body and returns the trimmed
- * text after it, or null if the phrase isn't present or nothing follows it.
+ * Case-insensitively finds triggerPhrase in body -- either as a notomate
+ * mention token whose display name matches the trigger phrase, or as
+ * literal text -- and returns the trimmed text after it, or null if the
+ * phrase isn't present or nothing follows it.
  */
 export function extractCommand(
   body: string,
   triggerPhrase: string,
 ): string | null {
+  const bareTrigger = triggerPhrase.replace(/^@/, "").toLowerCase();
+
+  MENTION_TOKEN_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = MENTION_TOKEN_RE.exec(body)) !== null) {
+    if (match[1].trim().toLowerCase() === bareTrigger) {
+      const command = body.slice(match.index + match[0].length).trim();
+      return command.length > 0 ? command : null;
+    }
+  }
+
   const idx = body.toLowerCase().indexOf(triggerPhrase.toLowerCase());
   if (idx === -1) {
     return null;
