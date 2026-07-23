@@ -1,10 +1,15 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
-import { type CollabConfig, tiptapDocSchema, updateNoteViaCollab } from "../../collab-client.js";
+import {
+  type PartialCollabConfig,
+  resolveCollabConfig,
+  tiptapDocSchema,
+  updateNoteViaCollab,
+} from "../../collab-client.js";
 import type { NotomateClient } from "../../notomate-client.js";
 import { type DefaultContext, resolveNoteId, resolveWorkspaceId, textResult } from "../context.js";
 
-export function createNoteTools(client: NotomateClient, ctx: DefaultContext, collab: CollabConfig) {
+export function createNoteTools(client: NotomateClient, ctx: DefaultContext, collab: PartialCollabConfig) {
   return [
     tool(
       "list_notes",
@@ -80,7 +85,10 @@ export function createNoteTools(client: NotomateClient, ctx: DefaultContext, col
         if (args.title === undefined && args.content === undefined) {
           return textResult("Nothing to update: provide title and/or content.");
         }
-        await updateNoteViaCollab(collab, noteId, { title: args.title, content: args.content });
+        await updateNoteViaCollab(resolveCollabConfig(collab), noteId, {
+          title: args.title,
+          content: args.content,
+        });
         return textResult(`Updated note ${noteId}`);
       },
     ),

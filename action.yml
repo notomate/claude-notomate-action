@@ -12,20 +12,19 @@ inputs:
     required: false
     default: ""
   notomate-base-url:
-    description: "Base URL of the notomate API, e.g. http://notomate-api:8080."
+    description: "Base URL notomate is reachable at, e.g. https://notomate.example.com or http://notomate-nginx. Must be the same origin notomate's editor itself uses (nginx-fronted): the update_note tool derives its collab (Hocuspocus) WebSocket endpoint from this origin's /ws/ route."
     required: true
   notomate-api-key:
     description: "Notomate personal API key (Authorization: Bearer) used to call the notomate REST API."
     required: true
-  notomate-collab-url:
-    description: "Base URL of notomate's collab (Hocuspocus) server, e.g. ws://notomate-collab:3000. Connected to directly, not through notomate's nginx."
-    required: true
   notomate-app-secret:
-    description: "notomate's APP_SECRET. Used to locally sign a short-lived service JWT for authenticating to the collab server, since it only trusts that JWT (as a cookie), not the API key. Treat as a secret."
-    required: true
+    description: "notomate's APP_SECRET. Only needed if the update_note tool is used (see allowed-tools): it signs a short-lived service JWT locally to authenticate the collab connection, since that only trusts a JWT cookie, not the API key. Treat as a secret."
+    required: false
+    default: ""
   notomate-bot-user-id:
-    description: "Id of the notomate user this action acts as when editing notes via the collab server. Should be the owner of notomate-api-key so collab-side permission checks match the REST API's."
-    required: true
+    description: "Id of the notomate user this action acts as when editing notes via collab. Only needed if the update_note tool is used. Should be the owner of notomate-api-key so collab-side permission checks match the REST API's."
+    required: false
+    default: ""
   trigger-phrase:
     description: "Phrase that must appear in a comment to trigger the agent."
     required: false
@@ -76,7 +75,6 @@ runs:
         INPUT_CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
         INPUT_NOTOMATE_BASE_URL: ${{ inputs.notomate-base-url }}
         INPUT_NOTOMATE_API_KEY: ${{ inputs.notomate-api-key }}
-        INPUT_NOTOMATE_COLLAB_URL: ${{ inputs.notomate-collab-url }}
         INPUT_NOTOMATE_APP_SECRET: ${{ inputs.notomate-app-secret }}
         INPUT_NOTOMATE_BOT_USER_ID: ${{ inputs.notomate-bot-user-id }}
         INPUT_TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}

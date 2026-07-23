@@ -20,12 +20,54 @@ export const tiptapDocSchema = z
 export type TiptapDoc = z.infer<typeof tiptapDocSchema>;
 
 export interface CollabConfig {
-  /** Base URL of notomate's collab (Hocuspocus) server, e.g. ws://notomate-collab:3000. */
+  /**
+   * Origin (protocol://host[:port]) notomate is reachable at — the same
+   * origin its own editor opens a collab connection against (see
+   * deriveCollabWsOrigin). Not a standalone input: derived from
+   * notomate-base-url.
+   */
   url: string;
   /** Same secret notomate's API signs user session JWTs with (APP_SECRET). */
   appSecret: string;
   /** Id of the notomate user this automation acts as when editing notes. */
   botUserId: string;
+}
+
+/** As configured on the action: only required once update_note is actually called. */
+export type PartialCollabConfig = Partial<CollabConfig>;
+
+const COLLAB_INPUT_NAMES: Record<keyof CollabConfig, string> = {
+  url: "notomate-base-url",
+  appSecret: "notomate-app-secret",
+  botUserId: "notomate-bot-user-id",
+};
+
+/**
+ * notomate's own editor connects to its collab room at
+ * `${protocol}//${window.location.host}/ws/notes/${noteId}` — the same
+ * origin nginx serves the app from (see notomate's
+ * web/src/hooks/use-note-collab.ts and nginx/nginx.conf.template's /ws/
+ * location). Deriving from notomate-base-url instead of a separate input
+ * keeps this action pointed at whatever single origin notomate is actually
+ * reachable through, same as the browser.
+ */
+export function deriveCollabWsOrigin(baseUrl: string): string {
+  const parsed = new URL(baseUrl);
+  const wsProtocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+  return `${wsProtocol}//${parsed.host}`;
+}
+
+/** Validates a PartialCollabConfig is complete enough to open a collab connection. */
+export function resolveCollabConfig(config: PartialCollabConfig): CollabConfig {
+  const missing = (Object.keys(COLLAB_INPUT_NAMES) as (keyof CollabConfig)[]).filter((key) => !config[key]);
+  if (missing.length > 0) {
+    throw new Error(
+      `update_note requires the following action input(s) to be set: ${missing
+        .map((key) => COLLAB_INPUT_NAMES[key])
+        .join(", ")}`,
+    );
+  }
+  return config as CollabConfig;
 }
 
 export interface NoteCollabUpdate {
@@ -90,9 +132,11 @@ export async function updateNoteViaCollab(
 
   // Constructed explicitly (rather than via HocuspocusProvider's `url` shorthand)
   // because WebSocketPolyfill can only be set through HocuspocusProviderWebsocket's
-  // own config; HocuspocusProvider's `url` shorthand doesn't accept it.
+  // own config; HocuspocusProvider's `url` shorthand doesn't accept it. The path
+  // matches notomate's own editor (use-note-collab.ts) so it lands on nginx's
+  // /ws/ location the same way a browser connection would.
   const websocketProvider = new HocuspocusProviderWebsocket({
-    url: config.url,
+    url: `${config.url}/ws/notes/${noteId}`,
     WebSocketPolyfill: authenticatedWebSocketPolyfill(token),
   });
 
