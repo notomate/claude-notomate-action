@@ -142,9 +142,19 @@ export async function updateNoteViaCollab(
   // own config; HocuspocusProvider's `url` shorthand doesn't accept it. The path
   // matches notomate's own editor (use-note-collab.ts) so it lands on nginx's
   // /ws/ location the same way a browser connection would.
+  let connectionAttempts = 0;
   const websocketProvider = new HocuspocusProviderWebsocket({
     url: wsUrl,
     WebSocketPolyfill: authenticatedWebSocketPolyfill(token),
+    onStatus: ({ status }) => {
+      if (status === "connecting") connectionAttempts += 1;
+      core.info(`[update_note] websocket status for note:${noteId}: ${status} (attempt ${connectionAttempts})`);
+    },
+    onClose: ({ event }) => {
+      core.info(
+        `[update_note] websocket closed for note:${noteId}: code=${event?.code ?? "?"} reason=${event?.reason || "<none>"}`,
+      );
+    },
   });
 
   const provider = new HocuspocusProvider({
