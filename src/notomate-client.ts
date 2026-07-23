@@ -87,17 +87,6 @@ export class NotomateClient {
     });
   }
 
-  updateNote(
-    workspaceId: string,
-    noteId: string,
-    body: { title?: string; content?: string },
-  ) {
-    return this.request<unknown>("PUT", `/workspaces/${workspaceId}/notes/${noteId}`, {
-      body,
-      markdown: true,
-    });
-  }
-
   deleteNote(workspaceId: string, noteId: string) {
     return this.request<unknown>("DELETE", `/workspaces/${workspaceId}/notes/${noteId}`);
   }

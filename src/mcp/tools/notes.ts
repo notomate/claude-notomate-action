@@ -1,9 +1,10 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+import { type CollabConfig, tiptapDocSchema, updateNoteViaCollab } from "../../collab-client.js";
 import type { NotomateClient } from "../../notomate-client.js";
 import { type DefaultContext, resolveNoteId, resolveWorkspaceId, textResult } from "../context.js";
 
-export function createNoteTools(client: NotomateClient, ctx: DefaultContext) {
+export function createNoteTools(client: NotomateClient, ctx: DefaultContext, collab: CollabConfig) {
   return [
     tool(
       "list_notes",
@@ -65,21 +66,22 @@ export function createNoteTools(client: NotomateClient, ctx: DefaultContext) {
 
     tool(
       "update_note",
-      "Update a note's title and/or content (markdown).",
+      "Update a note's title and/or content by editing it live in notomate's collaborative note room " +
+        "(the same Hocuspocus/Y.js room notomate's editor connects to), so open editors see the change " +
+        "immediately. content must be a TipTap/ProseMirror JSON document (e.g. { type: 'doc', content: [...] " +
+        "}), notomate's raw stored format — not markdown.",
       {
-        workspaceId: z.string().optional(),
         noteId: z.string().optional(),
         title: z.string().optional(),
-        content: z.string().optional().describe("Markdown content"),
+        content: tiptapDocSchema.optional().describe("TipTap JSON document"),
       },
       async (args) => {
-        const workspaceId = resolveWorkspaceId(args.workspaceId, ctx);
         const noteId = resolveNoteId(args.noteId, ctx);
-        const result = await client.updateNote(workspaceId, noteId, {
-          title: args.title,
-          content: args.content,
-        });
-        return textResult(result);
+        if (args.title === undefined && args.content === undefined) {
+          return textResult("Nothing to update: provide title and/or content.");
+        }
+        await updateNoteViaCollab(collab, noteId, { title: args.title, content: args.content });
+        return textResult(`Updated note ${noteId}`);
       },
     ),
 

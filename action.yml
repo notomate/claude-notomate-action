@@ -17,6 +17,15 @@ inputs:
   notomate-api-key:
     description: "Notomate personal API key (Authorization: Bearer) used to call the notomate REST API."
     required: true
+  notomate-collab-url:
+    description: "Base URL of notomate's collab (Hocuspocus) server, e.g. ws://notomate-collab:3000. Connected to directly, not through notomate's nginx."
+    required: true
+  notomate-app-secret:
+    description: "notomate's APP_SECRET. Used to locally sign a short-lived service JWT for authenticating to the collab server, since it only trusts that JWT (as a cookie), not the API key. Treat as a secret."
+    required: true
+  notomate-bot-user-id:
+    description: "Id of the notomate user this action acts as when editing notes via the collab server. Should be the owner of notomate-api-key so collab-side permission checks match the REST API's."
+    required: true
   trigger-phrase:
     description: "Phrase that must appear in a comment to trigger the agent."
     required: false
@@ -67,6 +76,9 @@ runs:
         INPUT_CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
         INPUT_NOTOMATE_BASE_URL: ${{ inputs.notomate-base-url }}
         INPUT_NOTOMATE_API_KEY: ${{ inputs.notomate-api-key }}
+        INPUT_NOTOMATE_COLLAB_URL: ${{ inputs.notomate-collab-url }}
+        INPUT_NOTOMATE_APP_SECRET: ${{ inputs.notomate-app-secret }}
+        INPUT_NOTOMATE_BOT_USER_ID: ${{ inputs.notomate-bot-user-id }}
         INPUT_TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
         INPUT_ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
         INPUT_MAX_TURNS: ${{ inputs.max-turns }}

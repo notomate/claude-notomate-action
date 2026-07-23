@@ -1,4 +1,5 @@
 import { createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
+import type { CollabConfig } from "../collab-client.js";
 import type { NotomateClient } from "../notomate-client.js";
 import type { DefaultContext } from "./context.js";
 import { createNoteTools } from "./tools/notes.js";
@@ -9,9 +10,9 @@ import { createWorkflowTools } from "./tools/workflows.js";
 
 export const NOTOMATE_SERVER_NAME = "notomate";
 
-export function buildNotomateMcpServer(client: NotomateClient, ctx: DefaultContext) {
+export function buildNotomateMcpServer(client: NotomateClient, ctx: DefaultContext, collab: CollabConfig) {
   const tools = [
-    ...createNoteTools(client, ctx),
+    ...createNoteTools(client, ctx, collab),
     ...createCommentTools(client, ctx),
     ...createViewTools(client, ctx),
     ...createStatsTools(client, ctx),

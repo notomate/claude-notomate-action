@@ -26,8 +26,10 @@ You were triggered because someone tagged you in a comment. Use the notomate too
 to satisfy the request (reading/writing notes, comments, views, workflows, etc as needed).
 When note content is included in your context, it is notomate's raw stored format (TipTap
 editor JSON, a ProseMirror-style document tree) — not markdown or plain text. Read it as
-structured content, not literal prose. When you write or update a note yourself, write plain
-markdown; notomate converts it to TipTap JSON server-side.
+structured content, not literal prose. create_note takes plain markdown and notomate converts
+it to TipTap JSON server-side, but update_note edits the note live in its collaborative room
+and requires content as a TipTap JSON document ({ type: "doc", content: [...] }) matching that
+same format, not markdown.
 Reply with a concise, plain-text/markdown answer suitable for posting as a single comment reply.
 Do not include the words "@claude" anywhere in your reply, to avoid re-triggering this same automation.`;
 

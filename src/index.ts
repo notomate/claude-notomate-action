@@ -1,4 +1,5 @@
 import * as core from "@actions/core";
+import type { CollabConfig } from "./collab-client.js";
 import { extractCommand, readEventPayload } from "./event.js";
 import { NotomateClient } from "./notomate-client.js";
 import { buildAllowedToolNames, buildNotomateMcpServer } from "./mcp/server.js";
@@ -22,6 +23,9 @@ async function run(): Promise<void> {
   const claudeCodeOAuthToken = getInput("claude-code-oauth-token") || undefined;
   const notomateBaseUrl = getInput("notomate-base-url", { required: true });
   const notomateApiKey = getInput("notomate-api-key", { required: true });
+  const notomateCollabUrl = getInput("notomate-collab-url", { required: true });
+  const notomateAppSecret = getInput("notomate-app-secret", { required: true });
+  const notomateBotUserId = getInput("notomate-bot-user-id", { required: true });
   const triggerPhrase = getInput("trigger-phrase") || "@claude";
   const allowedToolsOverride = getInput("allowed-tools");
   const maxTurns = Number.parseInt(getInput("max-turns") || "30", 10);
@@ -56,10 +60,16 @@ async function run(): Promise<void> {
   }
 
   const client = new NotomateClient(notomateBaseUrl, notomateApiKey);
-  const { server, tools } = buildNotomateMcpServer(client, {
-    workspaceId: payload.workspace.id,
-    noteId: comment.note_id,
-  });
+  const collab: CollabConfig = {
+    url: notomateCollabUrl,
+    appSecret: notomateAppSecret,
+    botUserId: notomateBotUserId,
+  };
+  const { server, tools } = buildNotomateMcpServer(
+    client,
+    { workspaceId: payload.workspace.id, noteId: comment.note_id },
+    collab,
+  );
 
   const allowedTools = allowedToolsOverride
     ? buildAllowedToolNames(allowedToolsOverride.split(",").map((s) => s.trim()).filter(Boolean))
