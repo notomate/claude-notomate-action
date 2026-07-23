@@ -25,6 +25,9 @@ In the notomate workspace where you want this to run, configure:
 | `ANTHROPIC_API_KEY` | secret | An Anthropic API key |
 | `NM_API_KEY` | secret | A notomate personal API key (User Settings → API Keys) belonging to a member of the workspace |
 | `NM_API_BASE_URL` | var | The notomate API's base URL reachable from the runner, e.g. `http://notomate-api:8080` |
+| `NM_COLLAB_URL` | var | notomate's collab (Hocuspocus) server, reachable directly from the runner (not via notomate-nginx), e.g. `ws://notomate-collab:3000` |
+| `NM_APP_SECRET` | secret | notomate's `APP_SECRET`. `update_note` edits notes live in their collab room, which only trusts a JWT cookie — not the API key — so this signs one locally |
+| `NM_BOT_USER_ID` | var | Id of the notomate user `NM_API_KEY` belongs to. The collab room's permission checks (workspace membership, note ownership) run against this user id, so it must match the API key's owner or `update_note` will get "Access denied" on private/workspace notes |
 
 Then add a workflow with an `on: comment: { types: [created] }` trigger that runs this action
 — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml).
@@ -37,6 +40,9 @@ Then add a workflow with an `on: comment: { types: [created] }` trigger that run
 | `claude-code-oauth-token` | one of these two | | Token from `claude setup-token`, for running under a Claude subscription instead of a metered API key |
 | `notomate-base-url` | yes | | Base URL of the notomate API |
 | `notomate-api-key` | yes | | Notomate personal API key (`Authorization: Bearer`) |
+| `notomate-collab-url` | yes | | Base URL of notomate's collab (Hocuspocus) server, e.g. `ws://notomate-collab:3000`. Connected to directly, not through notomate-nginx |
+| `notomate-app-secret` | yes | | notomate's `APP_SECRET`, used to sign a short-lived service JWT for the collab connection |
+| `notomate-bot-user-id` | yes | | Id of the notomate user this action acts as when editing notes via collab (should own `notomate-api-key`) |
 | `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment to trigger the agent |
 | `allowed-tools` | no | (full curated set) | Comma-separated notomate MCP tool names to allow |
 | `max-turns` | no | `30` | Maximum agent turns |
@@ -56,6 +62,12 @@ prevent the agent from posting stray top-level comments), views and view-objects
 stats, and workflow management (including dispatch, runs, job logs, and vars). Workspace
 membership, admin/instance user management, workflow secrets, workflow-files, and binary file
 upload/download are intentionally out of scope for v1.
+
+`update_note` is the one exception to "MCP tools call the REST API": it connects to notomate's
+collab (Hocuspocus) server and edits the note live in its Y.Doc room, the same way notomate's
+own editor does, instead of going through `PUT /notes/:id`. That means `content` must be a
+TipTap/ProseMirror JSON document (notomate's raw stored format), not markdown — `create_note`
+still takes markdown and lets the REST API convert it server-side.
 
 ## Development
 
@@ -120,6 +132,9 @@ explicitly via its own `env:` block, which `@actions/core.getInput()` then reads
      "INPUT_ANTHROPIC-API-KEY=sk-ant-..." \
      "INPUT_NOTOMATE-BASE-URL=http://localhost:8080" \
      "INPUT_NOTOMATE-API-KEY=nm_..." \
+     "INPUT_NOTOMATE-COLLAB-URL=ws://localhost:3000" \
+     "INPUT_NOTOMATE-APP-SECRET=..." \
+     "INPUT_NOTOMATE-BOT-USER-ID=..." \
      npx tsx src/index.ts
    ```
 

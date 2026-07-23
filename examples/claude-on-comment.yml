@@ -12,6 +12,21 @@
 #   - vars.NM_API_BASE_URL            -> the notomate API's base URL reachable
 #                                        from the runner, e.g.
 #                                        http://notomate-api:8080
+#   - vars.NM_COLLAB_URL              -> notomate's collab (Hocuspocus) server,
+#                                        reachable directly (not via
+#                                        notomate-nginx), e.g.
+#                                        ws://notomate-collab:3000
+#   - secrets.NM_APP_SECRET           -> notomate's APP_SECRET. update_note
+#                                        edits notes live in their collab
+#                                        room, which only trusts a JWT cookie
+#                                        (not the API key), so this signs one
+#                                        locally
+#   - vars.NM_BOT_USER_ID             -> id of the notomate user NM_API_KEY
+#                                        belongs to (User Settings, or
+#                                        GET /api/v1/users/:id/api-keys) —
+#                                        the collab room's permission checks
+#                                        run against this user id, so it must
+#                                        match the API key's owner
 #
 # The workflow engine fires this job for EVERY new comment in the workspace;
 # the action itself checks whether the comment actually tags @claude and
@@ -34,3 +49,6 @@ jobs:
           # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           notomate-base-url: ${{ vars.NM_API_BASE_URL }}
           notomate-api-key: ${{ secrets.NM_API_KEY }}
+          notomate-collab-url: ${{ vars.NM_COLLAB_URL }}
+          notomate-app-secret: ${{ secrets.NM_APP_SECRET }}
+          notomate-bot-user-id: ${{ vars.NM_BOT_USER_ID }}
