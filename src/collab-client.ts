@@ -1,3 +1,4 @@
+import * as core from "@actions/core";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
 import jwt from "jsonwebtoken";
 import { WebSocket as NodeWebSocket } from "ws";
@@ -127,6 +128,12 @@ export async function updateNoteViaCollab(
   noteId: string,
   update: NoteCollabUpdate,
 ): Promise<void> {
+  const wsUrl = `${config.url}/ws/notes/${noteId}`;
+  core.info(
+    `[update_note] connecting to ${wsUrl} as bot user ${config.botUserId} ` +
+      `(title=${update.title !== undefined ? "set" : "unset"}, content=${update.content !== undefined ? "set" : "unset"})`,
+  );
+
   const token = signServiceToken(config);
   const yDoc = new Y.Doc();
 
@@ -136,7 +143,7 @@ export async function updateNoteViaCollab(
   // matches notomate's own editor (use-note-collab.ts) so it lands on nginx's
   // /ws/ location the same way a browser connection would.
   const websocketProvider = new HocuspocusProviderWebsocket({
-    url: `${config.url}/ws/notes/${noteId}`,
+    url: wsUrl,
     WebSocketPolyfill: authenticatedWebSocketPolyfill(token),
   });
 
@@ -154,14 +161,17 @@ export async function updateNoteViaCollab(
         CONNECT_TIMEOUT_MS,
       );
       provider.on("synced", () => {
+        core.info(`[update_note] synced with collab room note:${noteId}`);
         clearTimeout(timer);
         resolve();
       });
       provider.on("authenticationFailed", ({ reason }: { reason: string }) => {
+        core.info(`[update_note] authenticationFailed for note:${noteId}: ${reason}`);
         clearTimeout(timer);
         reject(new Error(`Collab authentication failed for note:${noteId}: ${reason}`));
       });
       provider.on("close", ({ event }: { event: { reason?: string } }) => {
+        core.info(`[update_note] connection closed for note:${noteId} before syncing: ${event?.reason ?? "unknown reason"}`);
         clearTimeout(timer);
         reject(
           new Error(
@@ -171,18 +181,28 @@ export async function updateNoteViaCollab(
       });
     });
 
+    core.debug(`[update_note] pre-update content.data: ${yDoc.getMap("content").get("data")}`);
+    core.debug(`[update_note] pre-update meta.title: ${yDoc.getMap("meta").get("title")}`);
+
     yDoc.transact(() => {
       if (update.content !== undefined) {
         const sanitized = sanitizeContent(update.content) ?? DEFAULT_DOC;
-        yDoc.getMap("content").set("data", JSON.stringify(sanitized));
+        const serialized = JSON.stringify(sanitized);
+        core.info(`[update_note] setting content.data (${serialized.length} chars)`);
+        core.debug(`[update_note] content.data: ${serialized}`);
+        yDoc.getMap("content").set("data", serialized);
       }
       if (update.title !== undefined) {
+        core.info(`[update_note] setting meta.title to "${update.title}"`);
         yDoc.getMap("meta").set("title", update.title);
       }
     }, "local");
 
+    core.info(`[update_note] unsyncedChanges after transact: ${provider.unsyncedChanges}`);
+
     await new Promise<void>((resolve, reject) => {
       if (provider.unsyncedChanges === 0) {
+        core.info(`[update_note] no unsynced changes to flush; treating as already acked`);
         resolve();
         return;
       }
@@ -190,8 +210,10 @@ export async function updateNoteViaCollab(
         () => reject(new Error(`Timed out waiting for collab server to ack the update to note ${noteId}`)),
         FLUSH_TIMEOUT_MS,
       );
-      provider.on("unsyncedChanges", () => {
+      provider.on("unsyncedChanges", (count: number) => {
+        core.debug(`[update_note] unsyncedChanges event: ${count}`);
         if (provider.unsyncedChanges === 0) {
+          core.info(`[update_note] collab server acked update for note:${noteId}`);
           clearTimeout(timer);
           resolve();
         }
@@ -201,6 +223,7 @@ export async function updateNoteViaCollab(
     // The collab server flushes any pending debounced save immediately once
     // the last connection to a room disconnects (unloadImmediately, on by
     // default), so persistence is guaranteed by the time this returns.
+    core.info(`[update_note] disconnecting from note:${noteId}`);
     provider.disconnect();
     provider.destroy();
     websocketProvider.destroy();

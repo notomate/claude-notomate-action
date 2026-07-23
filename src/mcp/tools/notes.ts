@@ -1,3 +1,4 @@
+import * as core from "@actions/core";
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import {
@@ -82,13 +83,20 @@ export function createNoteTools(client: NotomateClient, ctx: DefaultContext, col
       },
       async (args) => {
         const noteId = resolveNoteId(args.noteId, ctx);
+        core.info(
+          `[update_note tool] called with noteId=${noteId} (arg noteId=${args.noteId ?? "<default>"}, ` +
+            `title=${args.title !== undefined ? JSON.stringify(args.title) : "<unset>"}, ` +
+            `content=${args.content !== undefined ? "<provided>" : "<unset>"})`,
+        );
         if (args.title === undefined && args.content === undefined) {
+          core.info("[update_note tool] nothing to update; skipping collab connection");
           return textResult("Nothing to update: provide title and/or content.");
         }
         await updateNoteViaCollab(resolveCollabConfig(collab), noteId, {
           title: args.title,
           content: args.content,
         });
+        core.info(`[update_note tool] updateNoteViaCollab resolved for note ${noteId}`);
         return textResult(`Updated note ${noteId}`);
       },
     ),
