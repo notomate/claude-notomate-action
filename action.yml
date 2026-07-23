@@ -20,7 +20,7 @@ inputs:
   notomate-app-secret:
     description: "notomate's APP_SECRET. Only needed if the update_note tool is used (see allowed-tools): it signs a short-lived service JWT locally to authenticate the collab connection, since that only trusts a JWT cookie, not the API key. Treat as a secret."
     required: false
-    default: ""
+    default: "default_secret"
   notomate-bot-user-id:
     description: "Id of the notomate user this action acts as when editing notes via collab. Only needed if the update_note tool is used. Should be the owner of notomate-api-key so collab-side permission checks match the REST API's."
     required: false
