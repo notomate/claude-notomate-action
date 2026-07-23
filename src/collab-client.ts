@@ -163,6 +163,11 @@ export async function updateNoteViaCollab(
     awareness: null,
     websocketProvider,
   });
+  // HocuspocusProvider only self-attaches when it creates its own websocketProvider
+  // (manageSocket); since we supply one to get WebSocketPolyfill, we must attach it
+  // ourselves, or this document's Auth/Sync messages are never sent and the
+  // connection sits open forever without synced/authenticationFailed/close ever firing.
+  provider.attach();
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -234,7 +239,9 @@ export async function updateNoteViaCollab(
     // the last connection to a room disconnects (unloadImmediately, on by
     // default), so persistence is guaranteed by the time this returns.
     core.info(`[update_note] disconnecting from note:${noteId}`);
-    provider.disconnect();
+    // provider.disconnect() is a deprecated no-op in v4 (see HocuspocusProvider's
+    // manageSocket split) -- the real connection lives on websocketProvider now.
+    websocketProvider.disconnect();
     provider.destroy();
     websocketProvider.destroy();
     yDoc.destroy();
