@@ -92,12 +92,19 @@ export function createNoteTools(client: NotomateClient, ctx: DefaultContext, col
           core.info("[update_note tool] nothing to update; skipping collab connection");
           return textResult("Nothing to update: provide title and/or content.");
         }
-        await updateNoteViaCollab(resolveCollabConfig(collab), noteId, {
-          title: args.title,
-          content: args.content,
-        });
-        core.info(`[update_note tool] updateNoteViaCollab resolved for note ${noteId}`);
-        return textResult(`Updated note ${noteId}`);
+        try {
+          const resolvedConfig = resolveCollabConfig(collab);
+          await updateNoteViaCollab(resolvedConfig, noteId, {
+            title: args.title,
+            content: args.content,
+          });
+          core.info(`[update_note tool] updateNoteViaCollab resolved for note ${noteId}`);
+          return textResult(`Updated note ${noteId}`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          core.error(`[update_note tool] failed for note ${noteId}: ${message}`);
+          return { ...textResult(`Failed to update note ${noteId}: ${message}`), isError: true };
+        }
       },
     ),
 
