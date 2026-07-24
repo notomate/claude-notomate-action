@@ -24,9 +24,7 @@ In the notomate workspace where you want this to run, configure:
 |---|---|---|
 | `ANTHROPIC_API_KEY` | secret | An Anthropic API key |
 | `NM_API_KEY` | secret | A notomate personal API key (User Settings → API Keys) belonging to a member of the workspace |
-| `NM_API_BASE_URL` | var | The notomate origin reachable from the runner, e.g. `https://notomate.example.com`. Must be the same origin notomate's own editor uses (nginx-fronted, not the `notomate-api` container directly) — `update_note` derives its collab (Hocuspocus) WebSocket endpoint from this origin's `/ws/` route |
-| `NM_APP_SECRET` | secret | notomate's `APP_SECRET`. Only needed if `update_note` is used: it edits notes live in their collab room, which only trusts a JWT cookie — not the API key — so this signs one locally |
-| `NM_BOT_USER_ID` | var | Id of the notomate user `NM_API_KEY` belongs to. Only needed if `update_note` is used — the collab room's permission checks (workspace membership, note ownership) run against this user id, so it must match the API key's owner or `update_note` will get "Access denied" on private/workspace notes |
+| `NM_API_BASE_URL` | var | The notomate origin reachable from the runner, e.g. `https://notomate.example.com`. Must be the same origin notomate's own editor uses (nginx-fronted, not the `notomate-api` container directly) — `update_note` derives its collab (Hocuspocus) WebSocket endpoint from this origin's `/ws/` route, and authenticates that connection with `NM_API_KEY` too |
 
 Then add a workflow with an `on: comment: { types: [created] }` trigger that runs this action
 — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml).
@@ -38,9 +36,7 @@ Then add a workflow with an `on: comment: { types: [created] }` trigger that run
 | `anthropic-api-key` | one of these two | | Anthropic API key |
 | `claude-code-oauth-token` | one of these two | | Token from `claude setup-token`, for running under a Claude subscription instead of a metered API key |
 | `notomate-base-url` | yes | | Origin notomate is reachable at (nginx-fronted, same origin its own editor uses) |
-| `notomate-api-key` | yes | | Notomate personal API key (`Authorization: Bearer`) |
-| `notomate-app-secret` | only for `update_note` | `""` | notomate's `APP_SECRET`, used to sign a short-lived service JWT for the collab connection |
-| `notomate-bot-user-id` | only for `update_note` | `""` | Id of the notomate user this action acts as when editing notes via collab (should own `notomate-api-key`) |
+| `notomate-api-key` | yes | | Notomate personal API key (`Authorization: Bearer`), used for both the REST API and the `update_note` collab connection |
 | `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment to trigger the agent |
 | `allowed-tools` | no | (full curated set) | Comma-separated notomate MCP tool names to allow |
 | `max-turns` | no | `30` | Maximum agent turns |
@@ -130,8 +126,6 @@ explicitly via its own `env:` block, which `@actions/core.getInput()` then reads
      "INPUT_ANTHROPIC-API-KEY=sk-ant-..." \
      "INPUT_NOTOMATE-BASE-URL=http://localhost:8080" \
      "INPUT_NOTOMATE-API-KEY=nm_..." \
-     "INPUT_NOTOMATE-APP-SECRET=..." \
-     "INPUT_NOTOMATE-BOT-USER-ID=..." \
      npx tsx src/index.ts
    ```
 

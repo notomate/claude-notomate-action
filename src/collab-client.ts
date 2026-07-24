@@ -1,6 +1,5 @@
 import * as core from "@actions/core";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
-import jwt from "jsonwebtoken";
 import { WebSocket as NodeWebSocket } from "ws";
 import { z } from "zod";
 import * as Y from "yjs";
@@ -28,10 +27,8 @@ export interface CollabConfig {
    * notomate-base-url.
    */
   url: string;
-  /** Same secret notomate's API signs user session JWTs with (APP_SECRET). */
-  appSecret: string;
-  /** Id of the notomate user this automation acts as when editing notes. */
-  botUserId: string;
+  /** Same notomate personal API key used for the REST API (Authorization: Bearer). */
+  apiKey: string;
 }
 
 /** As configured on the action: only required once update_note is actually called. */
@@ -39,8 +36,7 @@ export type PartialCollabConfig = Partial<CollabConfig>;
 
 const COLLAB_INPUT_NAMES: Record<keyof CollabConfig, string> = {
   url: "notomate-base-url",
-  appSecret: "notomate-app-secret",
-  botUserId: "notomate-bot-user-id",
+  apiKey: "notomate-api-key",
 };
 
 /**
@@ -80,13 +76,6 @@ const CONNECT_TIMEOUT_MS = 15_000;
 const FLUSH_TIMEOUT_MS = 10_000;
 const DEFAULT_DOC = { type: "doc", content: [{ type: "paragraph" }] };
 
-function signServiceToken(config: CollabConfig): string {
-  return jwt.sign({ id: config.botUserId }, config.appSecret, {
-    algorithm: "HS256",
-    expiresIn: "10m",
-  });
-}
-
 // Mirrors the sanitation notomate's own editor applies before rendering
 // (Editor.tsx's sanitizeContent): ProseMirror rejects empty text nodes, and a
 // bad node here would corrupt the doc for every collaborator who loads it.
@@ -103,15 +92,16 @@ function sanitizeContent(node: unknown): unknown {
 }
 
 /**
- * notomate's collab server authenticates connections by reading a `token`
- * cookie off the WebSocket upgrade request (notomate/collab's
- * auth-extension.js), not via the Hocuspocus auth-protocol handshake, so the
- * token has to be injected as a real HTTP header on the upgrade request.
+ * notomate's collab server authenticates connections off the WebSocket
+ * upgrade request's headers, not via the Hocuspocus auth-protocol handshake
+ * (notomate/collab's auth-extension.js), so the API key has to be injected
+ * as a real `Authorization: Bearer` HTTP header on the upgrade request —
+ * the same header/value the REST API uses.
  */
-function authenticatedWebSocketPolyfill(token: string) {
+function authenticatedWebSocketPolyfill(apiKey: string) {
   return class extends NodeWebSocket {
     constructor(address: string) {
-      super(address, [], { headers: { Cookie: `token=${token}` } });
+      super(address, [], { headers: { Authorization: `Bearer ${apiKey}` } });
     }
   };
 }
@@ -130,11 +120,10 @@ export async function updateNoteViaCollab(
 ): Promise<void> {
   const wsUrl = `${config.url}/ws/notes/${noteId}`;
   core.info(
-    `[update_note] connecting to ${wsUrl} as bot user ${config.botUserId} ` +
+    `[update_note] connecting to ${wsUrl} ` +
       `(title=${update.title !== undefined ? "set" : "unset"}, content=${update.content !== undefined ? "set" : "unset"})`,
   );
 
-  const token = signServiceToken(config);
   const yDoc = new Y.Doc();
 
   // Constructed explicitly (rather than via HocuspocusProvider's `url` shorthand)
@@ -145,7 +134,7 @@ export async function updateNoteViaCollab(
   let connectionAttempts = 0;
   const websocketProvider = new HocuspocusProviderWebsocket({
     url: wsUrl,
-    WebSocketPolyfill: authenticatedWebSocketPolyfill(token),
+    WebSocketPolyfill: authenticatedWebSocketPolyfill(config.apiKey),
     onStatus: ({ status }) => {
       if (status === "connecting") connectionAttempts += 1;
       core.info(`[update_note] websocket status for note:${noteId}: ${status} (attempt ${connectionAttempts})`);

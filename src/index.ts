@@ -23,8 +23,6 @@ async function run(): Promise<void> {
   const claudeCodeOAuthToken = getInput("claude-code-oauth-token") || undefined;
   const notomateBaseUrl = getInput("notomate-base-url", { required: true });
   const notomateApiKey = getInput("notomate-api-key", { required: true });
-  const notomateAppSecret = getInput("notomate-app-secret") || undefined;
-  const notomateBotUserId = getInput("notomate-bot-user-id") || undefined;
   const triggerPhrase = getInput("trigger-phrase") || "@claude";
   const allowedToolsOverride = getInput("allowed-tools");
   const maxTurns = Number.parseInt(getInput("max-turns") || "30", 10);
@@ -64,8 +62,7 @@ async function run(): Promise<void> {
   // derived from notomate-base-url rather than a separate input.
   const collab: PartialCollabConfig = {
     url: deriveCollabWsOrigin(notomateBaseUrl),
-    appSecret: notomateAppSecret,
-    botUserId: notomateBotUserId,
+    apiKey: notomateApiKey,
   };
   const { server, tools } = buildNotomateMcpServer(
     client,
