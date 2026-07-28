@@ -1,9 +1,10 @@
 import * as core from "@actions/core";
 import { deriveCollabWsOrigin, type PartialCollabConfig } from "./collab-client.js";
-import { extractCommand, readEventPayload } from "./event.js";
+import { extractCommand, readEventPayload, type EventPayload } from "./event.js";
 import { NotomateClient } from "./notomate-client.js";
 import { buildAllowedToolNames, buildNotomateMcpServer } from "./mcp/server.js";
-import { runAgent } from "./agent.js";
+import { type DefaultContext } from "./mcp/context.js";
+import { runAgent, type AgentCredentials } from "./agent.js";
 
 // Composite actions can't rely on @actions/core's default INPUT_<NAME> lookup for
 // kebab-case inputs: the runner sets them as literal hyphenated env vars, which bash
@@ -16,6 +17,161 @@ function getInput(name: string, options?: { required?: boolean }): string {
     throw new Error(`Input required and not supplied: ${name}`);
   }
   return value;
+}
+
+/**
+ * Shared trigger-phrase-detected -> run agent -> post reply -> set outputs
+ * flow, used by both the comment and message event handlers below. Errors
+ * during the agent run are caught and posted back as a reply (rather than
+ * just failing the action) so the person who triggered it sees why nothing
+ * useful happened, mirroring the original comment-only behavior.
+ */
+async function runTriggerAndReply(params: {
+  credentials: AgentCredentials;
+  command: string;
+  systemContext: string;
+  mcpServer: Parameters<typeof runAgent>[0]["mcpServer"];
+  allowedTools: string[];
+  maxTurns: number;
+  outputKey: string;
+  postReply: (body: string) => Promise<{ id: string }>;
+}): Promise<void> {
+  const { credentials, command, systemContext, mcpServer, allowedTools, maxTurns, outputKey, postReply } = params;
+
+  try {
+    const { replyText, isError } = await runAgent({
+      credentials,
+      prompt: command,
+      systemContext,
+      mcpServer,
+      allowedTools,
+      maxTurns,
+    });
+
+    const reply = await postReply(replyText);
+
+    core.setOutput(outputKey, reply.id);
+    core.setOutput("conclusion", isError ? "failure" : "success");
+    if (isError) {
+      core.setFailed("Agent run completed with an error.");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    core.error(`claude-notomate-action failed: ${message}`);
+
+    try {
+      const errorReply = await postReply(
+        `Sorry, I ran into an error and couldn't complete this request: ${message}`,
+      );
+      core.setOutput(outputKey, errorReply.id);
+    } catch (replyError) {
+      core.error(
+        `Also failed to post an error reply: ${
+          replyError instanceof Error ? replyError.message : String(replyError)
+        }`,
+      );
+    }
+
+    core.setOutput("conclusion", "failure");
+    core.setFailed(message);
+  }
+}
+
+async function handleComment(
+  payload: EventPayload,
+  client: NotomateClient,
+  collab: PartialCollabConfig,
+  credentials: AgentCredentials,
+  triggerPhrase: string,
+  allowedToolsOverride: string,
+  maxTurns: number,
+): Promise<void> {
+  const comment = payload.comment;
+  if (!comment) {
+    core.info("Event payload has no comment field; nothing to do.");
+    core.setOutput("conclusion", "skipped");
+    return;
+  }
+
+  const command = extractCommand(comment.body, triggerPhrase);
+  if (!command) {
+    core.info(`Comment does not contain trigger phrase "${triggerPhrase}"; skipping.`);
+    core.setOutput("conclusion", "skipped");
+    return;
+  }
+
+  const ctx: DefaultContext = { workspaceId: payload.workspace.id, noteId: comment.note_id };
+  const { server, tools } = buildNotomateMcpServer(client, ctx, collab);
+
+  const allowedTools = allowedToolsOverride
+    ? buildAllowedToolNames(allowedToolsOverride.split(",").map((s) => s.trim()).filter(Boolean))
+    : buildAllowedToolNames(tools.map((t) => t.name));
+
+  const systemContext = payload.note
+    ? `Context: this comment is on note "${payload.note.title}" (id: ${payload.note.id}) in workspace "${payload.workspace.name}".\n` +
+      `Note content (raw TipTap JSON, as stored by notomate):\n${payload.note.content}`
+    : `Context: this comment is on note id ${comment.note_id} in workspace "${payload.workspace.name}".`;
+
+  await runTriggerAndReply({
+    credentials,
+    command,
+    systemContext,
+    mcpServer: server,
+    allowedTools,
+    maxTurns,
+    outputKey: "comment-id",
+    postReply: (body) =>
+      client.createComment(payload.workspace.id, comment.note_id, {
+        body,
+        thread_id: comment.thread_id,
+      }),
+  });
+}
+
+async function handleMessage(
+  payload: EventPayload,
+  client: NotomateClient,
+  collab: PartialCollabConfig,
+  credentials: AgentCredentials,
+  triggerPhrase: string,
+  allowedToolsOverride: string,
+  maxTurns: number,
+): Promise<void> {
+  const message = payload.message;
+  if (!message) {
+    core.info("Event payload has no message field; nothing to do.");
+    core.setOutput("conclusion", "skipped");
+    return;
+  }
+
+  const command = extractCommand(message.body, triggerPhrase);
+  if (!command) {
+    core.info(`Message does not contain trigger phrase "${triggerPhrase}"; skipping.`);
+    core.setOutput("conclusion", "skipped");
+    return;
+  }
+
+  const ctx: DefaultContext = { workspaceId: payload.workspace.id, channelId: message.channel_id };
+  const { server, tools } = buildNotomateMcpServer(client, ctx, collab);
+
+  const allowedTools = allowedToolsOverride
+    ? buildAllowedToolNames(allowedToolsOverride.split(",").map((s) => s.trim()).filter(Boolean))
+    : buildAllowedToolNames(tools.map((t) => t.name));
+
+  const systemContext = payload.channel
+    ? `Context: this message is in channel "${payload.channel.name}" (id: ${payload.channel.id}) in workspace "${payload.workspace.name}".`
+    : `Context: this message is in channel id ${message.channel_id} in workspace "${payload.workspace.name}".`;
+
+  await runTriggerAndReply({
+    credentials,
+    command,
+    systemContext,
+    mcpServer: server,
+    allowedTools,
+    maxTurns,
+    outputKey: "message-id",
+    postReply: (body) => client.createChannelMessage(payload.workspace.id, message.channel_id, { body }),
+  });
 }
 
 async function run(): Promise<void> {
@@ -35,27 +191,6 @@ async function run(): Promise<void> {
   }
 
   const payload = readEventPayload();
-
-  if (payload.event !== "comment.created") {
-    core.info(`Ignoring event of type "${payload.event}" (only comment.created is handled).`);
-    core.setOutput("conclusion", "skipped");
-    return;
-  }
-
-  const comment = payload.comment;
-  if (!comment) {
-    core.info("Event payload has no comment field; nothing to do.");
-    core.setOutput("conclusion", "skipped");
-    return;
-  }
-
-  const command = extractCommand(comment.body, triggerPhrase);
-  if (!command) {
-    core.info(`Comment does not contain trigger phrase "${triggerPhrase}"; skipping.`);
-    core.setOutput("conclusion", "skipped");
-    return;
-  }
-
   const client = new NotomateClient(notomateBaseUrl, notomateApiKey);
   // update_note connects to the same origin notomate's own editor does for
   // collab (see notomate's web/src/hooks/use-note-collab.ts), so this is
@@ -64,61 +199,20 @@ async function run(): Promise<void> {
     url: deriveCollabWsOrigin(notomateBaseUrl),
     apiKey: notomateApiKey,
   };
-  const { server, tools } = buildNotomateMcpServer(
-    client,
-    { workspaceId: payload.workspace.id, noteId: comment.note_id },
-    collab,
-  );
+  const credentials: AgentCredentials = { anthropicApiKey, claudeCodeOAuthToken };
 
-  const allowedTools = allowedToolsOverride
-    ? buildAllowedToolNames(allowedToolsOverride.split(",").map((s) => s.trim()).filter(Boolean))
-    : buildAllowedToolNames(tools.map((t) => t.name));
-
-  const systemContext = payload.note
-    ? `Context: this comment is on note "${payload.note.title}" (id: ${payload.note.id}) in workspace "${payload.workspace.name}".\n` +
-      `Note content (raw TipTap JSON, as stored by notomate):\n${payload.note.content}`
-    : `Context: this comment is on note id ${comment.note_id} in workspace "${payload.workspace.name}".`;
-
-  try {
-    const { replyText, isError } = await runAgent({
-      credentials: { anthropicApiKey, claudeCodeOAuthToken },
-      prompt: command,
-      systemContext,
-      mcpServer: server,
-      allowedTools,
-      maxTurns,
-    });
-
-    const reply = await client.createComment(payload.workspace.id, comment.note_id, {
-      body: replyText,
-      thread_id: comment.thread_id,
-    });
-
-    core.setOutput("comment-id", reply.id);
-    core.setOutput("conclusion", isError ? "failure" : "success");
-    if (isError) {
-      core.setFailed("Agent run completed with an error.");
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    core.error(`claude-notomate-action failed: ${message}`);
-
-    try {
-      const errorReply = await client.createComment(payload.workspace.id, comment.note_id, {
-        body: `Sorry, I ran into an error and couldn't complete this request: ${message}`,
-        thread_id: comment.thread_id,
-      });
-      core.setOutput("comment-id", errorReply.id);
-    } catch (replyError) {
-      core.error(
-        `Also failed to post an error reply: ${
-          replyError instanceof Error ? replyError.message : String(replyError)
-        }`,
+  switch (payload.event) {
+    case "comment.created":
+      await handleComment(payload, client, collab, credentials, triggerPhrase, allowedToolsOverride, maxTurns);
+      return;
+    case "message.created":
+      await handleMessage(payload, client, collab, credentials, triggerPhrase, allowedToolsOverride, maxTurns);
+      return;
+    default:
+      core.info(
+        `Ignoring event of type "${payload.event}" (only comment.created and message.created are handled).`,
       );
-    }
-
-    core.setOutput("conclusion", "failure");
-    core.setFailed(message);
+      core.setOutput("conclusion", "skipped");
   }
 }
 

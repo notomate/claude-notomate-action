@@ -38,12 +38,37 @@ export interface NotomateComment {
   updated_by: string;
 }
 
-export interface CommentEventPayload {
+export interface NotomateChannel {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface NotomateMessage {
+  id: string;
+  workspace_id: string;
+  channel_id: string;
+  body: string;
+  edited: boolean;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface EventPayload {
   event: string;
   workspace: PayloadWorkspace;
   sender?: PayloadSender;
   note?: NotomateNote;
   comment?: NotomateComment;
+  channel?: NotomateChannel;
+  message?: NotomateMessage;
 }
 
 /**
@@ -52,17 +77,18 @@ export interface CommentEventPayload {
  * GitHub Actions' own convention — this is the only source with comment id /
  * thread id, since the NM_* env vars don't carry them.
  */
-export function readEventPayload(): CommentEventPayload {
+export function readEventPayload(): EventPayload {
   const eventPath = process.env.GITHUB_EVENT_PATH;
   if (!eventPath) {
     throw new Error("GITHUB_EVENT_PATH is not set");
   }
   const raw = readFileSync(eventPath, "utf-8");
-  return JSON.parse(raw) as CommentEventPayload;
+  return JSON.parse(raw) as EventPayload;
 }
 
-// notomate's comment composer stores @mentions inline as
-// "@[Display Name](userId)" rather than literal text (see
+// notomate's comment and channel-message composers (both built on the same
+// CommentEditor component) store @mentions inline as "@[Display Name](userId)"
+// rather than literal text (see
 // web/src/components/commentsidebar/commentMarkdown.ts's mentionToken()) --
 // picking "@claude" from the mention autocomplete produces this token, not
 // the literal string "@claude".

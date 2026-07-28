@@ -1,5 +1,5 @@
 name: "Claude Notomate Action"
-description: "Runs the Claude Agent SDK against a notomate @claude comment mention and replies in the same thread."
+description: "Runs the Claude Agent SDK against a notomate @claude mention in a comment or channel message and replies in the same thread/channel."
 author: "claude-notomate-action"
 
 inputs:
@@ -41,6 +41,9 @@ outputs:
   comment-id:
     description: "The id of the reply comment that was posted, if any."
     value: ${{ steps.run.outputs.comment-id }}
+  message-id:
+    description: "The id of the reply channel message that was posted, if any."
+    value: ${{ steps.run.outputs.message-id }}
 
 runs:
   using: "composite"

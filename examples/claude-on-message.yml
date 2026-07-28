@@ -1,0 +1,43 @@
+# Example notomate workflow: reply to any channel message that tags @claude.
+#
+# Copy this into a notomate workspace's workflow editor. Before enabling it,
+# configure on the workspace:
+#   - secrets.ANTHROPIC_API_KEY       -> an Anthropic API key, OR
+#     secrets.CLAUDE_CODE_OAUTH_TOKEN -> a token from `claude setup-token`,
+#                                        if you want to run under a Claude
+#                                        subscription instead of a metered key
+#   - secrets.NM_API_KEY              -> a notomate personal API key
+#                                        (User Settings > API Keys) belonging
+#                                        to a member of this workspace
+#   - vars.NM_API_BASE_URL            -> the notomate origin reachable from the
+#                                        runner, e.g. https://notomate.example.com.
+#                                        Must be the same origin notomate's own
+#                                        editor uses (nginx-fronted, not the
+#                                        notomate-api container directly):
+#                                        update_note derives its collab
+#                                        (Hocuspocus) WebSocket endpoint from
+#                                        this origin's /ws/ route, and
+#                                        authenticates that connection with
+#                                        NM_API_KEY too.
+#
+# The workflow engine fires this job for EVERY new channel message in the
+# workspace; the action itself checks whether the message actually tags
+# @claude and no-ops (conclusion=skipped) otherwise.
+name: Claude on message
+
+on:
+  message:
+    types: [created]
+
+jobs:
+  respond:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Claude
+        uses: notomate/claude-notomate-action@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Or, instead of anthropic-api-key, use a Claude subscription:
+          # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          notomate-base-url: ${{ vars.NM_API_BASE_URL }}
+          notomate-api-key: ${{ secrets.NM_API_KEY }}

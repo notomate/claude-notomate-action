@@ -141,6 +141,49 @@ export class NotomateClient {
     );
   }
 
+  // ---- Channels ----
+
+  listChannels(workspaceId: string) {
+    return this.request<unknown>("GET", `/workspaces/${workspaceId}/channels`);
+  }
+
+  // ---- Messages ----
+
+  listChannelMessages(workspaceId: string, channelId: string) {
+    return this.request<unknown>(
+      "GET",
+      `/workspaces/${workspaceId}/channels/${channelId}/messages`,
+    );
+  }
+
+  createChannelMessage(workspaceId: string, channelId: string, body: { body: string }) {
+    return this.request<{ id: string; channel_id: string }>(
+      "POST",
+      `/workspaces/${workspaceId}/channels/${channelId}/messages`,
+      { body },
+    );
+  }
+
+  updateChannelMessage(
+    workspaceId: string,
+    channelId: string,
+    messageId: string,
+    body: { body: string },
+  ) {
+    return this.request<unknown>(
+      "PUT",
+      `/workspaces/${workspaceId}/channels/${channelId}/messages/${messageId}`,
+      { body },
+    );
+  }
+
+  deleteChannelMessage(workspaceId: string, channelId: string, messageId: string) {
+    return this.request<unknown>(
+      "DELETE",
+      `/workspaces/${workspaceId}/channels/${channelId}/messages/${messageId}`,
+    );
+  }
+
   // ---- Views ----
 
   listViews(workspaceId: string, params: { type?: string; noteId?: string } = {}) {

@@ -1,20 +1,22 @@
 # claude-notomate-action
 
-A GitHub Action that lets [Claude](https://www.anthropic.com/claude) respond to comments in
-[notomate](https://github.com/notomate), a self-hosted note-taking app with a built-in,
-GitHub-Actions-compatible workflow engine.
+A GitHub Action that lets [Claude](https://www.anthropic.com/claude) respond to comments and
+channel messages in [notomate](https://github.com/notomate), a self-hosted note-taking app with
+a built-in, GitHub-Actions-compatible workflow engine.
 
-Whenever someone tags `@claude` in a notomate comment, this action:
+Whenever someone tags `@claude` in a notomate comment or channel message, this action:
 
-1. Extracts the text after `@claude` from the comment.
+1. Extracts the text after `@claude` from the comment/message.
 2. Runs it through the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript),
-   with the notomate REST API exposed as an in-process MCP server (notes, comments, views,
-   stats, and workflow management/dispatch/runs/vars).
-3. Posts Claude's answer back as a reply in the same comment thread.
+   with the notomate REST API exposed as an in-process MCP server (notes, comments, channels and
+   messages, views, stats, and workflow management/dispatch/runs/vars).
+3. Posts Claude's answer back as a reply in the same comment thread, or the same channel for
+   messages.
 
 This action is invoked by notomate's own workflow engine (executed via `act`), not by
-github.com — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) for a
-workflow you can copy into a notomate workspace.
+github.com — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
+[`examples/claude-on-message.yml`](examples/claude-on-message.yml) for workflows you can copy
+into a notomate workspace.
 
 ## Setup
 
@@ -26,8 +28,10 @@ In the notomate workspace where you want this to run, configure:
 | `NM_API_KEY` | secret | A notomate personal API key (User Settings → API Keys) belonging to a member of the workspace |
 | `NM_API_BASE_URL` | var | The notomate origin reachable from the runner, e.g. `https://notomate.example.com`. Must be the same origin notomate's own editor uses (nginx-fronted, not the `notomate-api` container directly) — `update_note` derives its collab (Hocuspocus) WebSocket endpoint from this origin's `/ws/` route, and authenticates that connection with `NM_API_KEY` too |
 
-Then add a workflow with an `on: comment: { types: [created] }` trigger that runs this action
-— see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml).
+Then add a workflow with an `on: comment: { types: [created] }` trigger (for note comments) or
+an `on: message: { types: [created] }` trigger (for channel messages) that runs this action —
+see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
+[`examples/claude-on-message.yml`](examples/claude-on-message.yml).
 
 ## Inputs
 
@@ -37,7 +41,7 @@ Then add a workflow with an `on: comment: { types: [created] }` trigger that run
 | `claude-code-oauth-token` | one of these two | | Token from `claude setup-token`, for running under a Claude subscription instead of a metered API key |
 | `notomate-base-url` | yes | | Origin notomate is reachable at (nginx-fronted, same origin its own editor uses) |
 | `notomate-api-key` | yes | | Notomate personal API key (`Authorization: Bearer`), used for both the REST API and the `update_note` collab connection |
-| `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment to trigger the agent |
+| `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment or channel message to trigger the agent |
 | `allowed-tools` | no | (full curated set) | Comma-separated notomate MCP tool names to allow |
 | `max-turns` | no | `30` | Maximum agent turns |
 
@@ -46,16 +50,18 @@ Then add a workflow with an `on: comment: { types: [created] }` trigger that run
 | Output | Description |
 |---|---|
 | `conclusion` | `success`, `skipped`, or `failure` |
-| `comment-id` | The id of the reply comment that was posted, if any |
+| `comment-id` | The id of the reply comment that was posted, if any (comment events only) |
+| `message-id` | The id of the reply channel message that was posted, if any (message events only) |
 
 ## What Claude can do
 
 The action exposes a curated subset of the notomate API as MCP tools: notes, comments
 (read/update/delete — replying is handled directly by the action, not exposed as a tool, to
-prevent the agent from posting stray top-level comments), views and view-objects, workspace
-stats, and workflow management (including dispatch, runs, job logs, and vars). Workspace
-membership, admin/instance user management, workflow secrets, workflow-files, and binary file
-upload/download are intentionally out of scope for v1.
+prevent the agent from posting stray top-level comments), channels and channel messages
+(list/read/update/delete, with the same restriction on posting new messages), views and
+view-objects, workspace stats, and workflow management (including dispatch, runs, job logs, and
+vars). Workspace membership, admin/instance user management, workflow secrets, workflow-files,
+and binary file upload/download are intentionally out of scope for v1.
 
 `update_note` is the one exception to "MCP tools call the REST API": it connects to notomate's
 collab (Hocuspocus) server and edits the note live in its Y.Doc room, the same way notomate's

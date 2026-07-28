@@ -4,6 +4,7 @@ import type { NotomateClient } from "../notomate-client.js";
 import type { DefaultContext } from "./context.js";
 import { createNoteTools } from "./tools/notes.js";
 import { createCommentTools } from "./tools/comments.js";
+import { createMessageTools } from "./tools/messages.js";
 import { createViewTools } from "./tools/views.js";
 import { createStatsTools } from "./tools/stats.js";
 import { createWorkflowTools } from "./tools/workflows.js";
@@ -14,6 +15,7 @@ export function buildNotomateMcpServer(client: NotomateClient, ctx: DefaultConte
   const tools = [
     ...createNoteTools(client, ctx, collab),
     ...createCommentTools(client, ctx),
+    ...createMessageTools(client, ctx),
     ...createViewTools(client, ctx),
     ...createStatsTools(client, ctx),
     ...createWorkflowTools(client, ctx),
