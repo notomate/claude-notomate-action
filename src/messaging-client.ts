@@ -119,3 +119,32 @@ export function sendChannelMessage(socket: Socket, body: string): Promise<Channe
     });
   });
 }
+
+/**
+ * Edits an existing message over the socket (message:update), the
+ * notomate-side counterpart to sendChannelMessage added alongside it --
+ * notomate's own ChannelView still edits via REST (see
+ * api/internal/api/handler/message.go's UpdateMessage), which the API
+ * server then relays to the room over Socket.IO itself
+ * (broadcastMessageChange -> messaging service's /internal/broadcast); this
+ * lets an already-connected socket like this action's skip that REST+relay
+ * round trip and edit directly. Unlike sendChannelMessage, no echo
+ * correlation is needed: the caller already knows the message's id, so the
+ * ack alone is enough to confirm the edit landed.
+ */
+export function updateChannelMessage(socket: Socket, messageId: string, body: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timed out waiting for ack after message:update for message ${messageId}`));
+    }, SEND_TIMEOUT_MS);
+
+    socket.emit("message:update", { messageId, body }, (ack?: { ok: boolean }) => {
+      clearTimeout(timer);
+      if (!ack?.ok) {
+        reject(new Error(`message:update was not acknowledged for message ${messageId}`));
+        return;
+      }
+      resolve();
+    });
+  });
+}

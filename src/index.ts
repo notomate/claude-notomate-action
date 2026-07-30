@@ -2,7 +2,12 @@ import * as core from "@actions/core";
 import type { Socket } from "socket.io-client";
 import { deriveCollabWsOrigin, type PartialCollabConfig } from "./collab-client.js";
 import { extractCommand, readEventPayload, type EventPayload } from "./event.js";
-import { connectChannelSocket, sendChannelMessage, type ChannelSocketMessage } from "./messaging-client.js";
+import {
+  connectChannelSocket,
+  sendChannelMessage,
+  updateChannelMessage,
+  type ChannelSocketMessage,
+} from "./messaging-client.js";
 import { NotomateClient } from "./notomate-client.js";
 import { buildAllowedToolNames, buildNotomateMcpServer } from "./mcp/server.js";
 import { type DefaultContext } from "./mcp/context.js";
@@ -148,22 +153,20 @@ async function runTriggeredChannelReply(params: {
   mcpServer: Parameters<typeof runAgent>[0]["mcpServer"];
   allowedTools: string[];
   maxTurns: number;
-  client: NotomateClient;
   socket: Socket;
-  workspaceId: string;
-  channelId: string;
   /** Ids of messages this action itself has posted into the room, so its
    * own status/reply messages don't get mistaken for new triggers when
    * they echo back over the socket (see the "room" case below). */
   ownMessageIds: Set<string>;
 }): Promise<string | undefined> {
-  const { credentials, command, systemContext, mcpServer, allowedTools, maxTurns, client, socket, workspaceId, channelId, ownMessageIds } =
-    params;
+  const { credentials, command, systemContext, mcpServer, allowedTools, maxTurns, socket, ownMessageIds } = params;
 
   let messageId: string | undefined;
   try {
-    // Posted over the socket (message:send), not the REST API, so it shows
-    // up for other room members the same way a real client's message does.
+    // Both the initial post and every edit below go over this action's own
+    // socket connection (message:send / message:update), not the REST API,
+    // so they show up for other room members the same way a real client's
+    // messages do.
     const posted = await sendChannelMessage(socket, INITIAL_STATUS_BODY);
     messageId = posted.id;
     ownMessageIds.add(messageId);
@@ -177,7 +180,7 @@ async function runTriggeredChannelReply(params: {
       maxTurns,
       onStatus: async (status) => {
         try {
-          await client.updateChannelMessage(workspaceId, channelId, messageId!, { body: status });
+          await updateChannelMessage(socket, messageId!, status);
         } catch (error) {
           core.warning(
             `[room] failed to post status update to message ${messageId}: ${
@@ -188,7 +191,7 @@ async function runTriggeredChannelReply(params: {
       },
     });
 
-    await client.updateChannelMessage(workspaceId, channelId, messageId, { body: replyText });
+    await updateChannelMessage(socket, messageId, replyText);
     if (isError) {
       core.error(`[room] agent run for reply message ${messageId} completed with an error.`);
     }
@@ -198,9 +201,11 @@ async function runTriggeredChannelReply(params: {
     core.error(`[room] failed to handle triggered message: ${message}`);
     if (messageId) {
       try {
-        await client.updateChannelMessage(workspaceId, channelId, messageId, {
-          body: `Sorry, I ran into an error and couldn't complete this request: ${message}`,
-        });
+        await updateChannelMessage(
+          socket,
+          messageId,
+          `Sorry, I ran into an error and couldn't complete this request: ${message}`,
+        );
       } catch (updateError) {
         core.error(
           `[room] also failed to post an error status: ${
@@ -283,10 +288,7 @@ async function handleRoomCreated(
         mcpServer: server,
         allowedTools,
         maxTurns,
-        client,
         socket,
-        workspaceId: payload.workspace.id,
-        channelId: channel.id,
         ownMessageIds,
       }).then((id) => {
         if (id) lastMessageId = id;
