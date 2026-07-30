@@ -13,10 +13,24 @@ Whenever someone tags `@claude` in a notomate comment or channel message, this a
 3. Posts Claude's answer back as a reply in the same comment thread, or the same channel for
    messages.
 
+Comments and channel messages are handled differently, following notomate's own transports for
+each:
+
+- **Comments** are still one-shot: the workflow engine dispatches a run per `comment.created`
+  event, and the action replies once and exits.
+- **Channel messages** run over notomate's real-time Socket.IO messaging service. The workflow
+  engine instead dispatches a run once per **room**, the moment a channel goes from empty to
+  occupied (`channel.room_created` — i.e. the first person opens it). The action joins that
+  channel's Socket.IO room itself and stays connected for as long as anyone else is in it,
+  responding to every `@claude`-tagged message posted while it's there: it posts a reply message
+  immediately, edits it with a running status line as the agent uses tools, then edits it once
+  more with the final answer. Once the room's online users drops to just this action's own
+  connection (everyone else left), it disconnects and the job ends.
+
 This action is invoked by notomate's own workflow engine (executed via `act`), not by
 github.com — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
-[`examples/claude-on-message.yml`](examples/claude-on-message.yml) for workflows you can copy
-into a notomate workspace.
+[`examples/claude-on-room.yml`](examples/claude-on-room.yml) for workflows you can copy into a
+notomate workspace.
 
 ## Setup
 
@@ -26,12 +40,12 @@ In the notomate workspace where you want this to run, configure:
 |---|---|---|
 | `ANTHROPIC_API_KEY` | secret | An Anthropic API key |
 | `NM_API_KEY` | secret | A notomate personal API key (User Settings → API Keys) belonging to a member of the workspace |
-| `NM_API_BASE_URL` | var | The notomate origin reachable from the runner, e.g. `https://notomate.example.com`. Must be the same origin notomate's own editor uses (nginx-fronted, not the `notomate-api` container directly) — `update_note` derives its collab (Hocuspocus) WebSocket endpoint from this origin's `/ws/` route, and authenticates that connection with `NM_API_KEY` too |
+| `NM_API_BASE_URL` | var | The notomate origin reachable from the runner, e.g. `https://notomate.example.com`. Must be the same origin notomate's own editor uses (nginx-fronted, not the `notomate-api` container directly) — the action's Socket.IO connection (channel messaging) and `update_note`'s collab (Hocuspocus) WebSocket connection both derive from this origin's `/socket.io/` and `/ws/` routes respectively, and both authenticate with `NM_API_KEY` |
 
 Then add a workflow with an `on: comment: { types: [created] }` trigger (for note comments) or
-an `on: message: { types: [created] }` trigger (for channel messages) that runs this action —
-see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
-[`examples/claude-on-message.yml`](examples/claude-on-message.yml).
+an `on: channel: { types: [room_created] }` trigger (for channel messages) that runs this
+action — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
+[`examples/claude-on-room.yml`](examples/claude-on-room.yml).
 
 ## Inputs
 
@@ -40,7 +54,7 @@ see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
 | `anthropic-api-key` | one of these two | | Anthropic API key |
 | `claude-code-oauth-token` | one of these two | | Token from `claude setup-token`, for running under a Claude subscription instead of a metered API key |
 | `notomate-base-url` | yes | | Origin notomate is reachable at (nginx-fronted, same origin its own editor uses) |
-| `notomate-api-key` | yes | | Notomate personal API key (`Authorization: Bearer`), used for both the REST API and the `update_note` collab connection |
+| `notomate-api-key` | yes | | Notomate personal API key (`Authorization: Bearer`), used for the REST API, the channel messaging Socket.IO connection, and the `update_note` collab connection |
 | `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment or channel message to trigger the agent |
 | `allowed-tools` | no | (full curated set) | Comma-separated notomate MCP tool names to allow |
 | `max-turns` | no | `30` | Maximum agent turns |
@@ -51,7 +65,7 @@ see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
 |---|---|
 | `conclusion` | `success`, `skipped`, or `failure` |
 | `comment-id` | The id of the reply comment that was posted, if any (comment events only) |
-| `message-id` | The id of the reply channel message that was posted, if any (message events only) |
+| `message-id` | The id of the last reply channel message posted while joined to the room, if any (room events only) |
 
 ## What Claude can do
 
@@ -137,3 +151,10 @@ explicitly via its own `env:` block, which `@actions/core.getInput()` then reads
 
 4. Confirm a reply comment appears in the correct thread via
    `GET /api/v1/workspaces/:id/notes/:noteId/comments`.
+
+For the room flow, use a fixture matching `channel.room_created` instead (see `src/event.ts`)
+and open the channel in a browser tab before running the action, so there's still someone else
+in the room for it to reply to — otherwise it'll see itself as the only one there and exit
+immediately. Post a message tagging `@claude` in that tab and watch the reply appear (and its
+status update) in real time; closing the tab should make the action disconnect and exit shortly
+after.

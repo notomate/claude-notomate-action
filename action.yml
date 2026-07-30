@@ -18,7 +18,7 @@ inputs:
     description: "Notomate personal API key (Authorization: Bearer) used to call the notomate REST API. Also authenticates the update_note tool's collab (Hocuspocus) connection, the same way it authenticates REST calls."
     required: true
   trigger-phrase:
-    description: "Phrase that must appear in a comment to trigger the agent."
+    description: "Phrase that must appear in a comment or channel message to trigger the agent."
     required: false
     default: "@claude"
   allowed-tools:
@@ -42,7 +42,7 @@ outputs:
     description: "The id of the reply comment that was posted, if any."
     value: ${{ steps.run.outputs.comment-id }}
   message-id:
-    description: "The id of the reply channel message that was posted, if any."
+    description: "The id of the last reply channel message posted while joined to the room, if any."
     value: ${{ steps.run.outputs.message-id }}
 
 runs:

@@ -14,6 +14,11 @@ export interface RunAgentOptions {
   mcpServer: McpSdkServerConfigWithInstance;
   allowedTools: string[];
   maxTurns: number;
+  /** Called with a short human-readable status line as the agent uses tools,
+   * so callers can surface progress (e.g. editing it into a chat message)
+   * before the final result is ready. Awaited before the run continues, so
+   * status updates land in the order the agent produced them. */
+  onStatus?: (status: string) => void | Promise<void>;
 }
 
 export interface RunAgentResult {
@@ -34,6 +39,25 @@ same format, not markdown.
 Reply with a concise, plain-text/markdown answer suitable for posting as a single reply, either a
 comment reply or a channel message depending on where you were triggered.
 Do not include the words "@claude" anywhere in your reply, to avoid re-triggering this same automation.`;
+
+/**
+ * Pulls tool names out of an assistant message's content blocks. Checked
+ * structurally rather than typed against the SDK's re-exported Anthropic
+ * content-block types, since those come from @anthropic-ai/sdk without that
+ * package being a direct dependency here.
+ */
+function extractToolUseNames(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  return content
+    .filter(
+      (block): block is { type: "tool_use"; name: string } =>
+        typeof block === "object" &&
+        block !== null &&
+        (block as { type?: unknown }).type === "tool_use" &&
+        typeof (block as { name?: unknown }).name === "string",
+    )
+    .map((block) => block.name);
+}
 
 /**
  * Runs a single non-interactive agent turn and returns the final synthesized
@@ -78,6 +102,13 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
   });
 
   for await (const message of stream) {
+    if (message.type === "assistant" && options.onStatus) {
+      const toolNames = extractToolUseNames(message.message?.content);
+      if (toolNames.length > 0) {
+        await options.onStatus(`⏳ Working… (using \`${toolNames.join("`, `")}\`)`);
+      }
+    }
+
     if (message.type === "result") {
       if (message.subtype === "success") {
         return { replyText: message.result, isError: message.is_error };

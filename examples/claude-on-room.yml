@@ -1,4 +1,6 @@
-# Example notomate workflow: reply to any channel message that tags @claude.
+# Example notomate workflow: join a channel's room whenever it goes from
+# empty to occupied, and reply to any message posted there that tags
+# @claude for as long as someone else is still around.
 #
 # Copy this into a notomate workspace's workflow editor. Before enabling it,
 # configure on the workspace:
@@ -14,20 +16,24 @@
 #                                        Must be the same origin notomate's own
 #                                        editor uses (nginx-fronted, not the
 #                                        notomate-api container directly):
-#                                        update_note derives its collab
-#                                        (Hocuspocus) WebSocket endpoint from
-#                                        this origin's /ws/ route, and
-#                                        authenticates that connection with
-#                                        NM_API_KEY too.
+#                                        the action's own Socket.IO connection
+#                                        (channel messaging) and update_note's
+#                                        collab (Hocuspocus) connection both
+#                                        derive from this origin, and
+#                                        authenticate with NM_API_KEY too.
 #
-# The workflow engine fires this job for EVERY new channel message in the
-# workspace; the action itself checks whether the message actually tags
-# @claude and no-ops (conclusion=skipped) otherwise.
-name: Claude on message
+# notomate's channel messaging runs over Socket.IO in real time. The
+# workflow engine fires this job once per channel, the moment its room
+# transitions from empty to occupied (i.e. the first person opens it) --
+# not once per message. The action itself then opens its own Socket.IO
+# connection into that room and stays there, replying to any message that
+# tags @claude, until it's the only one left in the room, at which point it
+# disconnects and the job ends.
+name: Claude on room
 
 on:
-  message:
-    types: [created]
+  channel:
+    types: [room_created]
 
 jobs:
   respond:
