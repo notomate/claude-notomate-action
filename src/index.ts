@@ -2,7 +2,7 @@ import * as core from "@actions/core";
 import type { Socket } from "socket.io-client";
 import { deriveCollabWsOrigin, type PartialCollabConfig } from "./collab-client.js";
 import { extractCommand, readEventPayload, type EventPayload } from "./event.js";
-import { connectChannelSocket, type ChannelSocketMessage } from "./messaging-client.js";
+import { connectChannelSocket, sendChannelMessage, type ChannelSocketMessage } from "./messaging-client.js";
 import { NotomateClient } from "./notomate-client.js";
 import { buildAllowedToolNames, buildNotomateMcpServer } from "./mcp/server.js";
 import { type DefaultContext } from "./mcp/context.js";
@@ -149,6 +149,7 @@ async function runTriggeredChannelReply(params: {
   allowedTools: string[];
   maxTurns: number;
   client: NotomateClient;
+  socket: Socket;
   workspaceId: string;
   channelId: string;
   /** Ids of messages this action itself has posted into the room, so its
@@ -156,12 +157,14 @@ async function runTriggeredChannelReply(params: {
    * they echo back over the socket (see the "room" case below). */
   ownMessageIds: Set<string>;
 }): Promise<string | undefined> {
-  const { credentials, command, systemContext, mcpServer, allowedTools, maxTurns, client, workspaceId, channelId, ownMessageIds } =
+  const { credentials, command, systemContext, mcpServer, allowedTools, maxTurns, client, socket, workspaceId, channelId, ownMessageIds } =
     params;
 
   let messageId: string | undefined;
   try {
-    const posted = await client.createChannelMessage(workspaceId, channelId, { body: INITIAL_STATUS_BODY });
+    // Posted over the socket (message:send), not the REST API, so it shows
+    // up for other room members the same way a real client's message does.
+    const posted = await sendChannelMessage(socket, INITIAL_STATUS_BODY);
     messageId = posted.id;
     ownMessageIds.add(messageId);
 
@@ -281,6 +284,7 @@ async function handleRoomCreated(
         allowedTools,
         maxTurns,
         client,
+        socket,
         workspaceId: payload.workspace.id,
         channelId: channel.id,
         ownMessageIds,
