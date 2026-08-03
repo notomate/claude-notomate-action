@@ -22,7 +22,11 @@ inputs:
     required: false
     default: "@claude"
   allowed-tools:
-    description: "Comma-separated list of notomate MCP tool names to allow. Defaults to the full curated set."
+    description: "Comma-separated list of tool names to allow. Bare names (e.g. list_notes) are treated as notomate tools; fully-qualified mcp__<server>__<tool> names (e.g. mcp__yfmcp__yfinance_search) reach servers configured via mcp-config. Defaults to the full curated set of notomate tools."
+    required: false
+    default: ""
+  mcp-config:
+    description: "JSON string configuring additional MCP servers to expose to the agent, alongside the built-in notomate server. Shape matches the Claude Code mcpServers config, e.g. '{\"mcpServers\":{\"yfmcp\":{\"command\":\"uvx\",\"args\":[\"yfmcp@latest\"]}}}'. A server's tools are only usable if also named (as mcp__<server>__<tool>) in allowed-tools. See examples/claude-with-external-mcp.yml."
     required: false
     default: ""
   max-turns:
@@ -80,4 +84,5 @@ runs:
         INPUT_NOTOMATE_API_KEY: ${{ inputs.notomate-api-key }}
         INPUT_TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
         INPUT_ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
+        INPUT_MCP_CONFIG: ${{ inputs.mcp-config }}
         INPUT_MAX_TURNS: ${{ inputs.max-turns }}

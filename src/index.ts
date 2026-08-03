@@ -11,6 +11,7 @@ import {
 import { NotomateClient } from "./notomate-client.js";
 import { buildAllowedToolNames, buildNotomateMcpServer } from "./mcp/server.js";
 import { type DefaultContext } from "./mcp/context.js";
+import { parseExternalMcpConfig, type ExternalMcpServerConfig } from "./mcp/external-config.js";
 import { runAgent, type AgentCredentials } from "./agent.js";
 
 // Composite actions can't rely on @actions/core's default INPUT_<NAME> lookup for
@@ -40,12 +41,13 @@ async function runTriggerAndReply(params: {
   command: string;
   systemContext: string;
   mcpServer: Parameters<typeof runAgent>[0]["mcpServer"];
+  extraMcpServers: Record<string, ExternalMcpServerConfig>;
   allowedTools: string[];
   maxTurns: number;
   outputKey: string;
   postReply: (body: string) => Promise<{ id: string }>;
 }): Promise<void> {
-  const { credentials, command, systemContext, mcpServer, allowedTools, maxTurns, outputKey, postReply } = params;
+  const { credentials, command, systemContext, mcpServer, extraMcpServers, allowedTools, maxTurns, outputKey, postReply } = params;
 
   try {
     const { replyText, isError } = await runAgent({
@@ -53,6 +55,7 @@ async function runTriggerAndReply(params: {
       prompt: command,
       systemContext,
       mcpServer,
+      extraMcpServers,
       allowedTools,
       maxTurns,
     });
@@ -93,6 +96,7 @@ async function handleComment(
   credentials: AgentCredentials,
   triggerPhrase: string,
   allowedToolsOverride: string,
+  extraMcpServers: Record<string, ExternalMcpServerConfig>,
   maxTurns: number,
 ): Promise<void> {
   const comment = payload.comment;
@@ -126,6 +130,7 @@ async function handleComment(
     command,
     systemContext,
     mcpServer: server,
+    extraMcpServers,
     allowedTools,
     maxTurns,
     outputKey: "comment-id",
@@ -151,6 +156,7 @@ async function runTriggeredChannelReply(params: {
   command: string;
   systemContext: string;
   mcpServer: Parameters<typeof runAgent>[0]["mcpServer"];
+  extraMcpServers: Record<string, ExternalMcpServerConfig>;
   allowedTools: string[];
   maxTurns: number;
   socket: Socket;
@@ -159,7 +165,8 @@ async function runTriggeredChannelReply(params: {
    * they echo back over the socket (see the "room" case below). */
   ownMessageIds: Set<string>;
 }): Promise<string | undefined> {
-  const { credentials, command, systemContext, mcpServer, allowedTools, maxTurns, socket, ownMessageIds } = params;
+  const { credentials, command, systemContext, mcpServer, extraMcpServers, allowedTools, maxTurns, socket, ownMessageIds } =
+    params;
 
   let messageId: string | undefined;
   try {
@@ -176,6 +183,7 @@ async function runTriggeredChannelReply(params: {
       prompt: command,
       systemContext,
       mcpServer,
+      extraMcpServers,
       allowedTools,
       maxTurns,
       onStatus: async (status) => {
@@ -235,6 +243,7 @@ async function handleRoomCreated(
   credentials: AgentCredentials,
   triggerPhrase: string,
   allowedToolsOverride: string,
+  extraMcpServers: Record<string, ExternalMcpServerConfig>,
   maxTurns: number,
   notomateBaseUrl: string,
   notomateApiKey: string,
@@ -286,6 +295,7 @@ async function handleRoomCreated(
         command,
         systemContext,
         mcpServer: server,
+        extraMcpServers,
         allowedTools,
         maxTurns,
         socket,
@@ -347,6 +357,14 @@ async function run(): Promise<void> {
     return;
   }
 
+  let extraMcpServers: Record<string, ExternalMcpServerConfig>;
+  try {
+    extraMcpServers = parseExternalMcpConfig(getInput("mcp-config"));
+  } catch (error) {
+    core.setFailed(error instanceof Error ? error.message : String(error));
+    return;
+  }
+
   const payload = readEventPayload();
   const client = new NotomateClient(notomateBaseUrl, notomateApiKey);
   // update_note connects to the same origin notomate's own editor does for
@@ -360,7 +378,16 @@ async function run(): Promise<void> {
 
   switch (payload.event) {
     case "comment.created":
-      await handleComment(payload, client, collab, credentials, triggerPhrase, allowedToolsOverride, maxTurns);
+      await handleComment(
+        payload,
+        client,
+        collab,
+        credentials,
+        triggerPhrase,
+        allowedToolsOverride,
+        extraMcpServers,
+        maxTurns,
+      );
       return;
     case "channel.room_created":
       await handleRoomCreated(
@@ -370,6 +397,7 @@ async function run(): Promise<void> {
         credentials,
         triggerPhrase,
         allowedToolsOverride,
+        extraMcpServers,
         maxTurns,
         notomateBaseUrl,
         notomateApiKey,

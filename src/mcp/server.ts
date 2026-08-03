@@ -33,8 +33,10 @@ export function buildNotomateMcpServer(client: NotomateClient, ctx: DefaultConte
 /**
  * In-process MCP tools surface to the agent as mcp__<serverName>__<toolName>.
  * Build the allow-list from the registered tools so it can't drift from the
- * actual tool set.
+ * actual tool set. Names already qualified this way (e.g. tools from an
+ * external server added via mcp-config, like mcp__yfmcp__yfinance_search)
+ * are passed through unchanged rather than double-wrapped.
  */
 export function buildAllowedToolNames(toolNames: string[]): string[] {
-  return toolNames.map((name) => `mcp__${NOTOMATE_SERVER_NAME}__${name}`);
+  return toolNames.map((name) => (name.includes("__") ? name : `mcp__${NOTOMATE_SERVER_NAME}__${name}`));
 }

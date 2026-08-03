@@ -56,7 +56,8 @@ action — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml
 | `notomate-base-url` | yes | | Origin notomate is reachable at (nginx-fronted, same origin its own editor uses) |
 | `notomate-api-key` | yes | | Notomate personal API key (`Authorization: Bearer`), used for the REST API, the channel messaging Socket.IO connection, and the `update_note` collab connection |
 | `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment or channel message to trigger the agent |
-| `allowed-tools` | no | (full curated set) | Comma-separated notomate MCP tool names to allow |
+| `allowed-tools` | no | (full curated set) | Comma-separated tool names to allow. Bare names (e.g. `list_notes`) are notomate tools; fully-qualified `mcp__<server>__<tool>` names reach servers from `mcp-config` |
+| `mcp-config` | no | | JSON string adding extra MCP servers alongside the built-in notomate one — see [Adding external MCP servers](#adding-external-mcp-servers) |
 | `max-turns` | no | `30` | Maximum agent turns |
 
 ## Outputs
@@ -82,6 +83,37 @@ collab (Hocuspocus) server and edits the note live in its Y.Doc room, the same w
 own editor does, instead of going through `PUT /notes/:id`. That means `content` must be a
 TipTap/ProseMirror JSON document (notomate's raw stored format), not markdown — `create_note`
 still takes markdown and lets the REST API convert it server-side.
+
+## Adding external MCP servers
+
+Besides the built-in notomate server, the agent can reach any other MCP server your workflow
+sets up, via the `mcp-config` input — a JSON string in the same shape as Claude Code's own
+`.mcp.json`:
+
+```yaml
+mcp-config: |
+  {
+    "mcpServers": {
+      "yfmcp": { "command": "uvx", "args": ["yfmcp@latest"] }
+    }
+  }
+allowed-tools: list_notes,get_note,mcp__yfmcp__yfinance_get_ticker_info,mcp__yfmcp__yfinance_search
+```
+
+A few things worth knowing:
+
+- **stdio servers run as a subprocess of the action**, spawned with whatever `command`/`args` you
+  give (`uvx`, `npx`, a Docker CLI, etc.), so any interpreter/CLI it needs (`uv`, Node, Docker) has
+  to already be on the runner. Add a step *before* this action's `uses:` line to install it, and
+  to pre-fetch the package itself so the agent's first tool call doesn't stall on a cold download.
+- `allowed-tools` **replaces** the default rather than adding to it — once you set it, list every
+  notomate tool you still want (bare names) alongside the external ones (`mcp__<server>__<tool>`).
+- An external server's tools run with whatever privileges its `command` has on the runner — treat
+  each one as a new trust boundary, the same as adding any other third-party dependency.
+
+See [`examples/claude-with-external-mcp.yml`](examples/claude-with-external-mcp.yml) for a full
+workflow wiring in [newsmcp](https://github.com/pranciskus/newsmcp) (world news, no API key) and
+[yfinance-mcp](https://github.com/narumiruna/yfinance-mcp) (Yahoo Finance data via `uv`).
 
 ## Development
 

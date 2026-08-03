@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import type { McpSdkServerConfigWithInstance } from "@anthropic-ai/claude-agent-sdk";
 import { NOTOMATE_SERVER_NAME } from "./mcp/server.js";
+import type { ExternalMcpServerConfig } from "./mcp/external-config.js";
 
 export interface AgentCredentials {
   anthropicApiKey?: string;
@@ -12,6 +13,8 @@ export interface RunAgentOptions {
   prompt: string;
   systemContext: string;
   mcpServer: McpSdkServerConfigWithInstance;
+  /** Additional MCP servers from the mcp-config input, keyed by server name. */
+  extraMcpServers?: Record<string, ExternalMcpServerConfig>;
   allowedTools: string[];
   maxTurns: number;
   /** Called with a short human-readable status line as the agent uses tools,
@@ -92,7 +95,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
     options: {
       systemPrompt: SYSTEM_PROMPT,
       tools: [],
-      mcpServers: { [NOTOMATE_SERVER_NAME]: options.mcpServer },
+      mcpServers: { [NOTOMATE_SERVER_NAME]: options.mcpServer, ...options.extraMcpServers },
       allowedTools: options.allowedTools,
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
