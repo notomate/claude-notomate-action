@@ -65,6 +65,7 @@ action — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml
 | `mcp-config` | no | | JSON string adding extra MCP servers alongside the built-in notomate one — see [Adding external MCP servers](#adding-external-mcp-servers) |
 | `direct-prompt` | no | | Fixed task prompt used instead of extracting a command from an event, for triggers that aren't a comment/channel message (e.g. `schedule`, `workflow_dispatch`). No reply is posted anywhere; the agent uses its tools directly. See [`examples/claude-scheduled-news-digest.yml`](examples/claude-scheduled-news-digest.yml) |
 | `max-turns` | no | `30` | Maximum agent turns |
+| `model` | no | `claude-sonnet-5` | Claude model to use, e.g. `claude-opus-4-20250514` |
 
 ## Outputs
 

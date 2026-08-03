@@ -37,6 +37,10 @@ inputs:
     description: "Maximum number of agent turns to run."
     required: false
     default: "30"
+  model:
+    description: "Claude model to use, e.g. claude-opus-4-20250514. Defaults to claude-sonnet-5."
+    required: false
+    default: "claude-sonnet-5"
   node-version:
     description: "Node.js version to run the action with."
     required: false
@@ -91,3 +95,4 @@ runs:
         INPUT_MCP_CONFIG: ${{ inputs.mcp-config }}
         INPUT_DIRECT_PROMPT: ${{ inputs.direct-prompt }}
         INPUT_MAX_TURNS: ${{ inputs.max-turns }}
+        INPUT_MODEL: ${{ inputs.model }}

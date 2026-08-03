@@ -44,10 +44,12 @@ async function runTriggerAndReply(params: {
   extraMcpServers: Record<string, ExternalMcpServerConfig>;
   allowedTools: string[];
   maxTurns: number;
+  model?: string;
   outputKey: string;
   postReply: (body: string) => Promise<{ id: string }>;
 }): Promise<void> {
-  const { credentials, command, systemContext, mcpServer, extraMcpServers, allowedTools, maxTurns, outputKey, postReply } = params;
+  const { credentials, command, systemContext, mcpServer, extraMcpServers, allowedTools, maxTurns, model, outputKey, postReply } =
+    params;
 
   try {
     const { replyText, isError } = await runAgent({
@@ -58,6 +60,7 @@ async function runTriggerAndReply(params: {
       extraMcpServers,
       allowedTools,
       maxTurns,
+      model,
     });
 
     const reply = await postReply(replyText);
@@ -98,6 +101,7 @@ async function handleComment(
   allowedToolsOverride: string,
   extraMcpServers: Record<string, ExternalMcpServerConfig>,
   maxTurns: number,
+  model: string | undefined,
 ): Promise<void> {
   const comment = payload.comment;
   if (!comment) {
@@ -133,6 +137,7 @@ async function handleComment(
     extraMcpServers,
     allowedTools,
     maxTurns,
+    model,
     outputKey: "comment-id",
     postReply: (body) =>
       client.createComment(payload.workspace.id, comment.note_id, {
@@ -158,6 +163,7 @@ async function handleDirectPrompt(
   allowedToolsOverride: string,
   extraMcpServers: Record<string, ExternalMcpServerConfig>,
   maxTurns: number,
+  model: string | undefined,
 ): Promise<void> {
   const ctx: DefaultContext = { workspaceId: payload.workspace.id };
   const { server, tools } = buildNotomateMcpServer(client, ctx, collab);
@@ -179,6 +185,7 @@ async function handleDirectPrompt(
       extraMcpServers,
       allowedTools,
       maxTurns,
+      model,
     });
 
     core.info(`Direct prompt run finished: ${replyText}`);
@@ -211,13 +218,14 @@ async function runTriggeredChannelReply(params: {
   extraMcpServers: Record<string, ExternalMcpServerConfig>;
   allowedTools: string[];
   maxTurns: number;
+  model?: string;
   socket: Socket;
   /** Ids of messages this action itself has posted into the room, so its
    * own status/reply messages don't get mistaken for new triggers when
    * they echo back over the socket (see the "room" case below). */
   ownMessageIds: Set<string>;
 }): Promise<string | undefined> {
-  const { credentials, command, systemContext, mcpServer, extraMcpServers, allowedTools, maxTurns, socket, ownMessageIds } =
+  const { credentials, command, systemContext, mcpServer, extraMcpServers, allowedTools, maxTurns, model, socket, ownMessageIds } =
     params;
 
   let messageId: string | undefined;
@@ -238,6 +246,7 @@ async function runTriggeredChannelReply(params: {
       extraMcpServers,
       allowedTools,
       maxTurns,
+      model,
       onStatus: async (status) => {
         try {
           await updateChannelMessage(socket, messageId!, status);
@@ -297,6 +306,7 @@ async function handleRoomCreated(
   allowedToolsOverride: string,
   extraMcpServers: Record<string, ExternalMcpServerConfig>,
   maxTurns: number,
+  model: string | undefined,
   notomateBaseUrl: string,
   notomateApiKey: string,
 ): Promise<void> {
@@ -350,6 +360,7 @@ async function handleRoomCreated(
         extraMcpServers,
         allowedTools,
         maxTurns,
+        model,
         socket,
         ownMessageIds,
       }).then((id) => {
@@ -402,6 +413,7 @@ async function run(): Promise<void> {
   const allowedToolsOverride = getInput("allowed-tools");
   const directPrompt = getInput("direct-prompt");
   const maxTurns = Number.parseInt(getInput("max-turns") || "30", 10);
+  const model = getInput("model") || undefined;
 
   if (!anthropicApiKey && !claudeCodeOAuthToken) {
     core.setFailed(
@@ -440,6 +452,7 @@ async function run(): Promise<void> {
         allowedToolsOverride,
         extraMcpServers,
         maxTurns,
+        model,
       );
       return;
     case "channel.room_created":
@@ -452,6 +465,7 @@ async function run(): Promise<void> {
         allowedToolsOverride,
         extraMcpServers,
         maxTurns,
+        model,
         notomateBaseUrl,
         notomateApiKey,
       );
@@ -467,6 +481,7 @@ async function run(): Promise<void> {
           allowedToolsOverride,
           extraMcpServers,
           maxTurns,
+          model,
         );
         return;
       }

@@ -17,6 +17,8 @@ export interface RunAgentOptions {
   extraMcpServers?: Record<string, ExternalMcpServerConfig>;
   allowedTools: string[];
   maxTurns: number;
+  /** Claude model to use, e.g. "claude-opus-4-20250514". Defaults to the bundled CLI's default model. */
+  model?: string;
   /** Called with a short human-readable status line as the agent uses tools,
    * so callers can surface progress (e.g. editing it into a chat message)
    * before the final result is ready. Awaited before the run continues, so
@@ -103,6 +105,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunAgentResult
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
       maxTurns: options.maxTurns,
+      model: options.model,
       env: { ...process.env, ...authEnv },
     },
   });
