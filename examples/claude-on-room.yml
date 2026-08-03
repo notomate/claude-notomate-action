@@ -47,3 +47,5 @@ jobs:
           # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           notomate-base-url: ${{ vars.NM_API_BASE_URL }}
           notomate-api-key: ${{ secrets.NM_API_KEY }}
+          # Defaults to claude-sonnet-5; override to pin a specific model:
+          # model: claude-opus-4-20250514
