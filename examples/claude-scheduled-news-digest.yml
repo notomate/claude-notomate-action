@@ -1,0 +1,58 @@
+# Example notomate workflow: daily US news digest, published as a public
+# note, using newsmcp (https://github.com/pranciskus/newsmcp).
+#
+# Runs on a schedule and can also be run manually from the workflow editor
+# (workflow_dispatch). Neither trigger is a comment or channel message, so
+# there's no event body to pull a command out of and nowhere to post a
+# reply -- this uses direct-prompt instead, which hands the agent a fixed
+# task and lets it use its tools (here, create_note) to produce the actual
+# output.
+#
+# Cron is always evaluated in UTC. "0 22 * * *" below is 06:00 the next day
+# in Asia/Taipei (UTC+8) -- adjust the hour for your own timezone.
+#
+# Copy this into a notomate workspace's workflow editor. Before enabling it,
+# configure on the workspace the same secrets/vars as
+# examples/claude-on-comment.yml (ANTHROPIC_API_KEY or
+# CLAUDE_CODE_OAUTH_TOKEN, NM_API_KEY, NM_API_BASE_URL).
+name: Daily US news digest
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pre-fetch newsmcp
+        run: npx -y @newsmcp/server --help
+        shell: bash
+
+      - name: Run Claude
+        uses: notomate/claude-notomate-action@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Or, instead of anthropic-api-key, use a Claude subscription:
+          # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          notomate-base-url: ${{ vars.NM_API_BASE_URL }}
+          notomate-api-key: ${{ secrets.NM_API_KEY }}
+          mcp-config: |
+            {
+              "mcpServers": {
+                "newsmcp": {
+                  "command": "npx",
+                  "args": ["-y", "@newsmcp/server"]
+                }
+              }
+            }
+          allowed-tools: create_note,mcp__newsmcp__get_news,mcp__newsmcp__get_topics,mcp__newsmcp__get_regions
+          direct-prompt: >-
+            Use get_news to fetch today's top news for the United States (region: US).
+            Translate everything into Traditional Chinese (zh-TW) yourself -- write the whole
+            note in Traditional Chinese, don't just paste the English source text untranslated.
+            Then call create_note with visibility "public" to publish a single note titled
+            with today's date plus "美國新聞摘要" (e.g. "2026-08-03 美國新聞摘要"), formatted as
+            a markdown digest of the top stories: headline, a one-paragraph summary, and the
+            source, for each.

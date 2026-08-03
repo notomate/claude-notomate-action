@@ -142,6 +142,58 @@ async function handleComment(
   });
 }
 
+/**
+ * Runs the agent for triggers that aren't a comment or channel message --
+ * e.g. a schedule or workflow_dispatch event -- so there's no message body to
+ * extract a command from and nowhere to post a reply. Runs directPrompt as
+ * the whole task instead, trusting the agent to use its notomate tools
+ * (e.g. create_note) to produce whatever output the prompt asks for.
+ */
+async function handleDirectPrompt(
+  payload: EventPayload,
+  client: NotomateClient,
+  collab: PartialCollabConfig,
+  credentials: AgentCredentials,
+  directPrompt: string,
+  allowedToolsOverride: string,
+  extraMcpServers: Record<string, ExternalMcpServerConfig>,
+  maxTurns: number,
+): Promise<void> {
+  const ctx: DefaultContext = { workspaceId: payload.workspace.id };
+  const { server, tools } = buildNotomateMcpServer(client, ctx, collab);
+
+  const allowedTools = allowedToolsOverride
+    ? buildAllowedToolNames(allowedToolsOverride.split(",").map((s) => s.trim()).filter(Boolean))
+    : buildAllowedToolNames(tools.map((t) => t.name));
+
+  const systemContext = `Context: this run was triggered directly (event: "${payload.event}"), not by a comment ` +
+    `or channel message, in workspace "${payload.workspace.name}". There is nothing to reply to -- use your ` +
+    `tools to produce whatever output the task asks for (e.g. creating a note).`;
+
+  try {
+    const { replyText, isError } = await runAgent({
+      credentials,
+      prompt: directPrompt,
+      systemContext,
+      mcpServer: server,
+      extraMcpServers,
+      allowedTools,
+      maxTurns,
+    });
+
+    core.info(`Direct prompt run finished: ${replyText}`);
+    core.setOutput("conclusion", isError ? "failure" : "success");
+    if (isError) {
+      core.setFailed("Agent run completed with an error.");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    core.error(`claude-notomate-action failed: ${message}`);
+    core.setOutput("conclusion", "failure");
+    core.setFailed(message);
+  }
+}
+
 const INITIAL_STATUS_BODY = "⏳ Claude is working on this…";
 
 /**
@@ -348,6 +400,7 @@ async function run(): Promise<void> {
   const notomateApiKey = getInput("notomate-api-key", { required: true });
   const triggerPhrase = getInput("trigger-phrase") || "@claude";
   const allowedToolsOverride = getInput("allowed-tools");
+  const directPrompt = getInput("direct-prompt");
   const maxTurns = Number.parseInt(getInput("max-turns") || "30", 10);
 
   if (!anthropicApiKey && !claudeCodeOAuthToken) {
@@ -404,8 +457,22 @@ async function run(): Promise<void> {
       );
       return;
     default:
+      if (directPrompt) {
+        await handleDirectPrompt(
+          payload,
+          client,
+          collab,
+          credentials,
+          directPrompt,
+          allowedToolsOverride,
+          extraMcpServers,
+          maxTurns,
+        );
+        return;
+      }
       core.info(
-        `Ignoring event of type "${payload.event}" (only comment.created and channel.room_created are handled).`,
+        `Ignoring event of type "${payload.event}" (only comment.created and channel.room_created are handled, ` +
+          `unless direct-prompt is set).`,
       );
       core.setOutput("conclusion", "skipped");
   }

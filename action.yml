@@ -29,6 +29,10 @@ inputs:
     description: "JSON string configuring additional MCP servers to expose to the agent, alongside the built-in notomate server. Shape matches the Claude Code mcpServers config, e.g. '{\"mcpServers\":{\"yfmcp\":{\"command\":\"uvx\",\"args\":[\"yfmcp@latest\"]}}}'. A server's tools are only usable if also named (as mcp__<server>__<tool>) in allowed-tools. See examples/claude-with-external-mcp.yml."
     required: false
     default: ""
+  direct-prompt:
+    description: "Fixed task prompt to run when this action is triggered by something other than a comment or channel message (e.g. a schedule or workflow_dispatch trigger), used instead of extracting a command from an event body. No reply is posted anywhere since there's nothing to reply to -- the agent is expected to use its tools directly (e.g. create_note) to produce output. Ignored for comment.created/channel.room_created events. See examples/claude-scheduled-news-digest.yml."
+    required: false
+    default: ""
   max-turns:
     description: "Maximum number of agent turns to run."
     required: false
@@ -85,4 +89,5 @@ runs:
         INPUT_TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
         INPUT_ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
         INPUT_MCP_CONFIG: ${{ inputs.mcp-config }}
+        INPUT_DIRECT_PROMPT: ${{ inputs.direct-prompt }}
         INPUT_MAX_TURNS: ${{ inputs.max-turns }}

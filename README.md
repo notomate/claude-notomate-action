@@ -27,6 +27,11 @@ each:
   more with the final answer. Once the room's online users drops to just this action's own
   connection (everyone else left), it disconnects and the job ends.
 
+For triggers that aren't a comment or channel message — a `schedule` or `workflow_dispatch`
+trigger, say — there's no event body to pull a command out of and nowhere to post a reply. Set
+`direct-prompt` to hand the agent a fixed task instead; see
+[`examples/claude-scheduled-news-digest.yml`](examples/claude-scheduled-news-digest.yml).
+
 This action is invoked by notomate's own workflow engine (executed via `act`), not by
 github.com — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml) and
 [`examples/claude-on-room.yml`](examples/claude-on-room.yml) for workflows you can copy into a
@@ -58,6 +63,7 @@ action — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml
 | `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment or channel message to trigger the agent |
 | `allowed-tools` | no | (full curated set) | Comma-separated tool names to allow. Bare names (e.g. `list_notes`) are notomate tools; fully-qualified `mcp__<server>__<tool>` names reach servers from `mcp-config` |
 | `mcp-config` | no | | JSON string adding extra MCP servers alongside the built-in notomate one — see [Adding external MCP servers](#adding-external-mcp-servers) |
+| `direct-prompt` | no | | Fixed task prompt used instead of extracting a command from an event, for triggers that aren't a comment/channel message (e.g. `schedule`, `workflow_dispatch`). No reply is posted anywhere; the agent uses its tools directly. See [`examples/claude-scheduled-news-digest.yml`](examples/claude-scheduled-news-digest.yml) |
 | `max-turns` | no | `30` | Maximum agent turns |
 
 ## Outputs
