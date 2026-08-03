@@ -1,0 +1,75 @@
+# Example notomate workflow: reply to @claude comments with two extra MCP
+# servers available, beyond notomate's own built-in tools:
+#   - newsmcp    (https://github.com/pranciskus/newsmcp)     -- world news
+#   - yfinance-mcp (https://github.com/narumiruna/yfinance-mcp) -- stock/market data
+#
+# Both are stdio MCP servers: the agent SDK spawns them as a subprocess (npx /
+# uvx) and talks to them over stdin/stdout, the same way Claude Code's own
+# .mcp.json config works. mcp-config just needs the command each one is
+# launched with; see each project's README for the full command/args shape
+# if you swap in a different server.
+#
+# The steps below pre-fetch each server's package *before* the action runs,
+# so the first real tool call during the agent run doesn't stall on a cold
+# npx/uvx download (and so a registry hiccup fails the workflow with a clear
+# error at setup time, not mid-conversation).
+#
+# Copy this into a notomate workspace's workflow editor. Before enabling it,
+# configure on the workspace the same secrets/vars as
+# examples/claude-on-comment.yml (ANTHROPIC_API_KEY or
+# CLAUDE_CODE_OAUTH_TOKEN, NM_API_KEY, NM_API_BASE_URL).
+name: Claude on comment (with external MCP servers)
+
+on:
+  comment:
+    types: [created]
+
+jobs:
+  respond:
+    runs-on: ubuntu-latest
+    steps:
+      # yfinance-mcp is a Python package run via `uv`/`uvx`, which isn't
+      # preinstalled on the runner image the way node/npx is.
+      - name: Install uv (for yfinance-mcp)
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+        shell: bash
+
+      - name: Pre-fetch yfinance-mcp
+        run: uvx yfmcp@latest --help
+        shell: bash
+
+      - name: Pre-fetch newsmcp
+        run: npx -y @newsmcp/server --help
+        shell: bash
+
+      - name: Run Claude
+        uses: notomate/claude-notomate-action@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Or, instead of anthropic-api-key, use a Claude subscription:
+          # claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          notomate-base-url: ${{ vars.NM_API_BASE_URL }}
+          notomate-api-key: ${{ secrets.NM_API_KEY }}
+          mcp-config: |
+            {
+              "mcpServers": {
+                "newsmcp": {
+                  "command": "npx",
+                  "args": ["-y", "@newsmcp/server"]
+                },
+                "yfmcp": {
+                  "command": "uvx",
+                  "args": ["yfmcp@latest"]
+                }
+              }
+            }
+          # allowed-tools replaces the default (full notomate set) rather
+          # than adding to it, so list every notomate tool you still want
+          # plus the external ones, fully-qualified as mcp__<server>__<tool>.
+          allowed-tools: >-
+            list_notes,get_note,create_note,update_note,
+            list_comments,get_comment,update_comment,delete_comment,
+            mcp__newsmcp__get_news,mcp__newsmcp__get_news_detail,
+            mcp__newsmcp__get_topics,mcp__newsmcp__get_regions,
+            mcp__yfmcp__yfinance_get_ticker_info,mcp__yfmcp__yfinance_search,
+            mcp__yfmcp__yfinance_get_ticker_news,mcp__yfmcp__yfinance_get_price_history
