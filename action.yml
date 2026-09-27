@@ -30,9 +30,17 @@ inputs:
     required: false
     default: ""
   direct-prompt:
-    description: "Fixed task prompt to run when this action is triggered by something other than a comment or channel message (e.g. a schedule or workflow_dispatch trigger), used instead of extracting a command from an event body. No reply is posted anywhere since there's nothing to reply to -- the agent is expected to use its tools directly (e.g. create_note) to produce output. Ignored for comment.created/channel.room_created events. See examples/claude-scheduled-news-digest.yml."
+    description: "Fixed task for schedule/workflow_dispatch triggers. The final response is published as a note by default. Ignored for comment.created/channel.room_created events."
     required: false
     default: ""
+  publish-note:
+    description: "Publish the direct-prompt final response as a note, including explanations of unavailable data. Set false to disable note publication. Only applies to direct-prompt runs."
+    required: false
+    default: "true"
+  note-visibility:
+    description: "Visibility of the automatically published note: private, public, or workspace. Only applies to direct-prompt runs."
+    required: false
+    default: "private"
   max-turns:
     description: "Maximum number of agent turns to run."
     required: false
@@ -47,6 +55,9 @@ inputs:
     default: "20"
 
 outputs:
+  note-id:
+    description: "ID of the note automatically published by a direct-prompt run."
+    value: ${{ steps.run.outputs.note-id }}
   conclusion:
     description: "One of success, skipped, or failure."
     value: ${{ steps.run.outputs.conclusion }}
@@ -94,5 +105,7 @@ runs:
         INPUT_ALLOWED_TOOLS: ${{ inputs.allowed-tools }}
         INPUT_MCP_CONFIG: ${{ inputs.mcp-config }}
         INPUT_DIRECT_PROMPT: ${{ inputs.direct-prompt }}
+        INPUT_PUBLISH_NOTE: ${{ inputs.publish-note }}
+        INPUT_NOTE_VISIBILITY: ${{ inputs.note-visibility }}
         INPUT_MAX_TURNS: ${{ inputs.max-turns }}
         INPUT_MODEL: ${{ inputs.model }}

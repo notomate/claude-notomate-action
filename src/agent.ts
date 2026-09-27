@@ -44,8 +44,9 @@ and requires content as a TipTap JSON document ({ type: "doc", content: [...] })
 same format, not markdown.
 If you were tagged in a comment or channel message, reply with a concise, plain-text/markdown
 answer suitable for posting as a single reply there. If you were triggered directly with a fixed
-task instead (no comment or message to reply to), just carry out the task with your tools --
-nothing you say is posted anywhere, so a short summary of what you did is enough.
+task instead (no comment or message to reply to), follow the publication policy in your context.
+When automatic publication is enabled, return the complete note as Markdown with a # title;
+the action will publish it. Otherwise return the result for the run log without publishing notes.
 Do not include the words "@claude" anywhere in note/comment/message content you write, to avoid re-triggering this same automation.`;
 
 /**

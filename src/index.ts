@@ -13,6 +13,7 @@ import { buildAllowedToolNames, buildNotomateMcpServer } from "./mcp/server.js";
 import { type DefaultContext } from "./mcp/context.js";
 import { parseExternalMcpConfig, type ExternalMcpServerConfig } from "./mcp/external-config.js";
 import { runAgent, type AgentCredentials } from "./agent.js";
+import { DIRECT_EXCLUDED_TOOLS, parsePublicationOptions, publicationContext, publishDirectResult } from "./direct-publication.js";
 
 // Composite actions can't rely on @actions/core's default INPUT_<NAME> lookup for
 // kebab-case inputs: the runner sets them as literal hyphenated env vars, which bash
@@ -151,8 +152,7 @@ async function handleComment(
  * Runs the agent for triggers that aren't a comment or channel message --
  * e.g. a schedule or workflow_dispatch event -- so there's no message body to
  * extract a command from and nowhere to post a reply. Runs directPrompt as
- * the whole task instead, trusting the agent to use its notomate tools
- * (e.g. create_note) to produce whatever output the prompt asks for.
+ * the whole task. The action publishes the final response when enabled.
  */
 async function handleDirectPrompt(
   payload: EventPayload,
@@ -166,17 +166,16 @@ async function handleDirectPrompt(
   model: string | undefined,
 ): Promise<void> {
   const ctx: DefaultContext = { workspaceId: payload.workspace.id };
-  const { server, tools } = buildNotomateMcpServer(client, ctx, collab);
+  const { server, tools } = buildNotomateMcpServer(client, ctx, collab, DIRECT_EXCLUDED_TOOLS);
 
   const allowedTools = allowedToolsOverride
     ? buildAllowedToolNames(allowedToolsOverride.split(",").map((s) => s.trim()).filter(Boolean))
     : buildAllowedToolNames(tools.map((t) => t.name));
 
-  const systemContext = `Context: this run was triggered directly (event: "${payload.event}"), not by a comment ` +
-    `or channel message, in workspace "${payload.workspace.name}". There is nothing to reply to -- use your ` +
-    `tools to produce whatever output the task asks for (e.g. creating a note).`;
-
   try {
+    const publication = parsePublicationOptions(getInput("publish-note"), getInput("note-visibility"));
+    const systemContext = `Context: this run was triggered directly (event: "${payload.event}") ` +
+      `in workspace "${payload.workspace.name}". ${publicationContext(publication)}`;
     const { replyText, isError } = await runAgent({
       credentials,
       prompt: directPrompt,
@@ -189,6 +188,8 @@ async function handleDirectPrompt(
     });
 
     core.info(`Direct prompt run finished: ${replyText}`);
+    const noteId = await publishDirectResult(client, payload.workspace.id, replyText, publication);
+    if (noteId) core.setOutput("note-id", noteId);
     core.setOutput("conclusion", isError ? "failure" : "success");
     if (isError) {
       core.setFailed("Agent run completed with an error.");

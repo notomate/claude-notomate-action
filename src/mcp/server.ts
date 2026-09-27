@@ -11,7 +11,7 @@ import { createWorkflowTools } from "./tools/workflows.js";
 
 export const NOTOMATE_SERVER_NAME = "notomate";
 
-export function buildNotomateMcpServer(client: NotomateClient, ctx: DefaultContext, collab: PartialCollabConfig) {
+export function buildNotomateMcpServer(client: NotomateClient, ctx: DefaultContext, collab: PartialCollabConfig, excludedTools: string[] = []) {
   const tools = [
     ...createNoteTools(client, ctx, collab),
     ...createCommentTools(client, ctx),
@@ -19,7 +19,7 @@ export function buildNotomateMcpServer(client: NotomateClient, ctx: DefaultConte
     ...createViewTools(client, ctx),
     ...createStatsTools(client, ctx),
     ...createWorkflowTools(client, ctx),
-  ];
+  ].filter((tool) => !excludedTools.includes(tool.name));
 
   const server = createSdkMcpServer({
     name: NOTOMATE_SERVER_NAME,

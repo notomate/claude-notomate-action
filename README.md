@@ -63,7 +63,9 @@ action — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml
 | `trigger-phrase` | no | `@claude` | Phrase that must appear in a comment or channel message to trigger the agent |
 | `allowed-tools` | no | (full curated set) | Comma-separated tool names to allow. Bare names (e.g. `list_notes`) are notomate tools; fully-qualified `mcp__<server>__<tool>` names reach servers from `mcp-config` |
 | `mcp-config` | no | | JSON string adding extra MCP servers alongside the built-in notomate one — see [Adding external MCP servers](#adding-external-mcp-servers) |
-| `direct-prompt` | no | | Fixed task prompt used instead of extracting a command from an event, for triggers that aren't a comment/channel message (e.g. `schedule`, `workflow_dispatch`). No reply is posted anywhere; the agent uses its tools directly. See [`examples/claude-scheduled-news-digest.yml`](examples/claude-scheduled-news-digest.yml) |
+| `direct-prompt` | no | | Fixed task for triggers other than comments/channel messages (e.g. `schedule`, `workflow_dispatch`). The final response is automatically published as a note by default. See [`examples/claude-scheduled-news-digest.yml`](examples/claude-scheduled-news-digest.yml) |
+| `publish-note` | no | `true` | Publish the direct-prompt final response as one note. Set `false` to disable note publication. Only applies to direct-prompt runs. |
+| `note-visibility` | no | `private` | Visibility of that note: `private`, `public`, or `workspace`. Only applies to direct-prompt runs. |
 | `max-turns` | no | `30` | Maximum agent turns |
 | `model` | no | `claude-sonnet-5` | Claude model to use, e.g. `claude-opus-4-20250514` |
 
@@ -72,8 +74,25 @@ action — see [`examples/claude-on-comment.yml`](examples/claude-on-comment.yml
 | Output | Description |
 |---|---|
 | `conclusion` | `success`, `skipped`, or `failure` |
+| `note-id` | ID of the automatically published note (direct-prompt runs only) |
 | `comment-id` | The id of the reply comment that was posted, if any (comment events only) |
 | `message-id` | The id of the last reply channel message posted while joined to the room, if any (room events only) |
+
+### Direct-prompt publication
+
+The action publishes Claude's final Markdown response, including explanations when a news source or other data is unavailable. Ask for a `# Title` followed by the full note content; responses without a heading use `Workflow result` as the title. The input `note-visibility` takes precedence over visibility requested in the prompt. Existing direct prompts now publish private notes by default; set `note-visibility: public` explicitly for public digests.
+
+```yaml
+publish-note: 'true'
+note-visibility: public # private (default), public, or workspace
+direct-prompt: >-
+  Write a Traditional Chinese news digest with a # title and the full Markdown content.
+  If the news source is unavailable, explain the failure without inventing news.
+```
+
+With `publish-note: 'false'`, the final response is logged without automatic publication. In direct-prompt mode the built-in `create_note` and `set_note_visibility` tools are removed regardless of `allowed-tools`; publication is managed by the action. Prompts should request content rather than call `create_note`. External MCP servers should provide data, not alternative note-publishing tools.
+
+Publication errors fail the action. SDK error results with response text are still published when enabled, but the run remains failed. If the agent throws before returning a response, there is no result to publish and the run fails. Comment and channel event handling is unchanged.
 
 ## What Claude can do
 
@@ -90,6 +109,15 @@ collab (Hocuspocus) server and edits the note live in its Y.Doc room, the same w
 own editor does, instead of going through `PUT /notes/:id`. That means `content` must be a
 TipTap/ProseMirror JSON document (notomate's raw stored format), not markdown — `create_note`
 still takes markdown and lets the REST API convert it server-side.
+
+## Choosing a model
+
+`model` is passed straight through to the Agent SDK's `query()` options, so it accepts anything
+the bundled Claude Code CLI does: a model alias (`claude-sonnet-5`, `claude-opus-5`,
+`claude-haiku-4-5-20251001`) or a dated model id (`claude-opus-4-20250514`). It defaults to
+`claude-sonnet-5` — bump it to `claude-opus-5` for harder tasks (e.g. `direct-prompt` runs doing
+multi-step research), or down to a Haiku model to cut cost/latency on simple, high-volume
+triggers. An invalid or unavailable model name fails the run rather than silently falling back.
 
 ## Adding external MCP servers
 

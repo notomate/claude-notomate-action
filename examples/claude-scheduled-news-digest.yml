@@ -5,8 +5,9 @@
 # (workflow_dispatch). Neither trigger is a comment or channel message, so
 # there's no event body to pull a command out of and nowhere to post a
 # reply -- this uses direct-prompt instead, which hands the agent a fixed
-# task and lets it use its tools (here, create_note) to produce the actual
-# output.
+# task. The action publishes the final response as a note, even when it
+# explains a news retrieval failure. NewsMCP may be unavailable; replace
+# the data source as needed.
 #
 # Cron is always evaluated in UTC. "0 22 * * *" below is 06:00 the next day
 # in Asia/Taipei (UTC+8) -- adjust the hour for your own timezone.
@@ -49,12 +50,15 @@ jobs:
                 }
               }
             }
-          allowed-tools: create_note,mcp__newsmcp__get_news,mcp__newsmcp__get_topics,mcp__newsmcp__get_regions
+          publish-note: 'true'
+          note-visibility: public
+          allowed-tools: mcp__newsmcp__get_news,mcp__newsmcp__get_topics,mcp__newsmcp__get_regions
           direct-prompt: >-
             Use get_news to fetch today's top news for the United States (region: US).
             Translate everything into Traditional Chinese (zh-TW) yourself -- write the whole
             note in Traditional Chinese, don't just paste the English source text untranslated.
-            Then call create_note with visibility "public" to publish a single note titled
-            with today's date plus "美國新聞摘要" (e.g. "2026-08-03 美國新聞摘要"), formatted as
+            Return the complete note starting with a # title using today's date in
+            Asia/Taipei plus "美國新聞摘要" (e.g. "2026-08-03 美國新聞摘要"), formatted as
             a markdown digest of the top stories: headline, a one-paragraph summary, and the
-            source, for each.
+            source, for each. If no usable news is available, return a note with the
+            same title explaining the failure in Traditional Chinese. Do not invent news.
